@@ -1,113 +1,167 @@
 package main
 
 import (
+	"bufio"
+	"fmt"
 	"log"
 	"net"
-	"net/http"
 	"net/rpc"
-	"time"
+	"os"
+	"os/exec"
+	"strings"
 )
 
-type Key string
-
-type NodeAddress string
-
-var MODULO int = 5
-
-type Node struct {
-	Address     NodeAddress
-	FingerTable []*Node
-	Predecessor *Node
-	Successors  []*Node
-
-	Bucket map[Key]string
-}
-
-func (n *Node) stabilize() {
-	x := n.Successors[0].Predecessor
-	if x == n || x == n.Successors[0] {
-		n.Successors[0] = x
-	}
-	//fmt.Print(successor)
-
-}
-
-func (n *Node) fixFingers() {
-
-}
-
-func (n *Node) checkPredecessor() {
-
-}
-
-func (n *Node) find_successor(id Key) (bool, Node) {
-	successor := n.Successors[0]
-	if string(n.Address) == string(id) || string(successor.Address) == string(id) {
-		return true, Node{Address: successor.Address}
-	} else {
-		return false, Node{Address: n.closest_preceding_node(id)}
-	}
-}
-
-func (n *Node) closest_preceding_node(id Key) NodeAddress {
-	//TODO:
-	//FINGERTABLE LOGIC
-	var hash NodeAddress = ""
-	return hash
-}
-
-func find(id Key, start Node) Node {
-	found, nextNode := false, start
-	maxSteps := 32
-	i := 0
-	for found == false && i < maxSteps {
-		found, nextNode = nextNode.find_successor(id)
-		i++
-	}
-	if found {
-		return nextNode
-	} else {
-		panic("error")
-	}
-}
-
-func (n *Node) Example(args *ExampleArgs, reply *ExampleReply) error {
-	reply.Y = args.X + 1
-	return nil
-}
-
-func (n *Node) server() {
-	rpc.Register(n)
-	rpc.HandleHTTP()
-	l, e := net.Listen("tcp", ":8080")
-	//sockname := coordinatorSock()
-	//os.Remove(sockname)
-	//l, e := net.Listen("unix", sockname)
-	if e != nil {
-		log.Fatal("listen error:", e)
-	}
-	go http.Serve(l, nil)
-}
-
-func create() *Node {
-	var ip NodeAddress = "192.XXX.XXX"
-	n := Node{
-		Address: ip,
-	}
-	n.server()
-	return &n
-}
-
 func main() {
-	n := create()
-	go func() {
-		for {
-			n.stabilize()
-			time.Sleep(time.Second * (1 / 3))
-			n.fixFingers()
-			time.Sleep(time.Second * (1 / 3))
-			n.checkPredecessor()
-			time.Sleep(time.Second * (1 / 3))
+	fmt.Println("Welcome to the CLI program. Type 'help' for commands.")
+
+	// Create a scanner to read input from the console
+	scanner := bufio.NewScanner(os.Stdin)
+
+	// Run the program continuously until the "quit" command is entered
+	for {
+		fmt.Print("Enter command: ")
+		// Read a line of input
+		scanner.Scan()
+		input := scanner.Text()
+
+		// Split the input into command and arguments
+		args := strings.Fields(input)
+		if len(args) == 0 {
+			continue
 		}
-	}()
+
+		// Extract the command and handle it
+		commandArg := args[0]
+		switch commandArg {
+		case "help":
+			printHelp()
+
+		case "port":
+			if len(args) < 2 {
+				fmt.Println("Usage: port <port>")
+				continue
+			}
+			adress := NodeAddress("0.0.0.0:" + args[1])
+			createNode(&CreateNodeArgs{adress})
+			var reply string
+			call(adress, "Node.Ping", &HostArgs{}, &reply)
+			fmt.Println("REPLY: ", reply)
+
+		case "create":
+			fmt.Println("Creates new ring")
+
+		case "join":
+			if len(args) < 2 {
+				fmt.Println("Usage: join <address>")
+				continue
+			}
+			fmt.Println("Joins existing node", args[1])
+
+		case "quit":
+			quit()
+
+		case "host":
+			fmt.Println("Hosts new node")
+
+		case "put":
+			if len(args) < 3 {
+				fmt.Println("Usage: put <key> <value>")
+			}
+			fmt.Println("Puts key-value pair", args[1], args[2])
+
+		case "putrandom":
+			fmt.Println("Puts random key-value pair")
+
+		case "get":
+			if len(args) < 2 {
+				fmt.Println("Usage: get <key>")
+			}
+			fmt.Println("Gets value for key", args[1])
+
+		case "delete":
+			if len(args) < 2 {
+				fmt.Println("Usage: delete <key>")
+			}
+			fmt.Println("Deletes key-value pair", args[1])
+
+		case "clear":
+			clearTerminal()
+
+		case "dump":
+			fmt.Println("Dumps information about current node")
+
+		default:
+			fmt.Println("Unknown command:", commandArg)
+			fmt.Println("Use 'help' for more information")
+		}
+	}
+}
+
+func printHelp() {
+	fmt.Println("Commands:")
+	fmt.Println("1. help - prints this help message")
+	fmt.Println("2. port <n> - set the port that this node should listen on. (Default :3410)")
+	fmt.Println("3. create - creates a new ring")
+	fmt.Println("4. join <node> - joins an existing node")
+	fmt.Println("5. quit - shut down. Ends the program.")
+	fmt.Println("6. host - hosts a new node")
+	fmt.Println("7. put <key> <value> - puts a key-value pair into the current ring")
+	fmt.Println("8. putrandom - puts a random key-value pair")
+	fmt.Println("9. get <key> - gets the value for a key")
+	fmt.Println("10. delete <key> - deletes a key-value pair")
+	fmt.Println("11. clear - clears the terminal screen")
+	fmt.Println("12. dump - display information about the current node, used for debug")
+}
+
+func clearTerminal() {
+	cmd := exec.Command("clear") // Use "clear" for Unix-like systems, "cls" for Windows
+	cmd.Stdout = os.Stdout
+	cmd.Run()
+}
+
+func createRing(args *CreateArgs) *CreateReply {
+	//TODO
+	fmt.Println("Creates new ring")
+	return &CreateReply{}
+}
+
+func joinRing(args *JoinArgs) *JoinReply {
+	//TODO
+	fmt.Println("Joins existing node", args.Address)
+	return &JoinReply{}
+}
+
+func createNode(args *CreateNodeArgs) {
+	//TODO
+	fmt.Println("\nCreates new node", args.Address)
+	node := Node{Address: args.Address}
+	go node.server()
+	//return &CreateNodeReply{}
+}
+
+func getNode(args *HostArgs) *HostReply {
+	//TODO
+	fmt.Println("Hosts new node")
+	net.DialTCP("tcp", nil, &net.TCPAddr{IP: net.ParseIP(string(args.Address))})
+	return &HostReply{}
+}
+func call(address NodeAddress, method string, args interface{}, reply interface{}) bool {
+	c, err := rpc.DialHTTP("tcp", string(address))
+	if err != nil {
+		log.Fatal("dialing:", err)
+	}
+	defer c.Close()
+
+	err = c.Call(method, args, reply)
+	if err == nil {
+		return true
+	}
+
+	fmt.Println(err)
+	return false
+}
+
+func quit() {
+	fmt.Println("\nQuitting program.")
+	os.Exit(0)
 }

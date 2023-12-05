@@ -1,37 +1,74 @@
 package main
 
-//
-// RPC definitions.
-//
-// remember to capitalize all names.
-//
-
-import (
-	"os"
-	"strconv"
-)
-
-//
-// example to show how to declare the arguments
-// and reply for an RPC.
-//
-
-type ExampleArgs struct {
-	X int
+type NodeRPC struct {
+	node *Node
 }
 
-type ExampleReply struct {
-	Y int
+func (n *NodeRPC) Create(args *CreateArgs, reply *CreateReply) error {
+	n.node = &Node{}
+	return nil
 }
 
-// Add your RPC definitions here.
+type CreateArgs struct {
+}
 
-// Cook up a unique-ish UNIX-domain socket name
-// in /var/tmp, for the coordinator.
-// Can't use the current directory since
-// Athena AFS doesn't support UNIX-domain sockets.
-func coordinatorSock() string {
-	s := "/var/tmp/5840-mr-"
-	s += strconv.Itoa(os.Getuid())
-	return s
+type CreateReply struct {
+}
+
+type CreateNodeArgs struct {
+	Address NodeAddress
+}
+
+type CreateNodeReply struct {
+}
+
+type PortArgs struct {
+	Port string
+}
+
+type PortReply struct {
+}
+
+type HostArgs struct {
+	Address NodeAddress
+}
+
+type HostReply struct {
+}
+
+type JoinArgs struct {
+	Address string
+}
+
+type JoinReply struct {
+}
+
+type PutArgs struct {
+	Key   Key
+	Value string
+}
+
+type PutReply struct {
+}
+
+type GetArgs struct {
+	Key Key
+}
+
+type GetReply struct {
+	Value string
+}
+
+type DeleteArgs struct {
+	Key Key
+}
+
+type DeleteReply struct {
+}
+
+type DumpArgs struct {
+}
+
+type DumpReply struct {
+	//TODO dumb all the fields from the node
 }
