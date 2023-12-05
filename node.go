@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"log"
 	"net"
 	"net/http"
@@ -21,6 +22,48 @@ type Node struct {
 	Successors  []*Node
 
 	Bucket map[Key]string
+}
+
+func CreateNode(args *CreateNodeArgs) {
+	node := Node{
+		Address: args.Address,
+		Bucket:  make(map[Key]string),
+	}
+	node.Bucket["state"] = "abcd"
+	go node.server()
+	testRPC(args)
+	return
+}
+
+func (n *Node) Get(args *GetArgs, reply *GetReply) error {
+	key := args.Key
+	_, ok := n.Bucket[key]
+	if !ok {
+		return fmt.Errorf("Key not found")
+	}
+	reply.Value = n.Bucket[key]
+	fmt.Println(n.Bucket)
+	return nil
+}
+
+func (n *Node) Delete(args *DeleteArgs, reply *DeleteReply) error {
+	key := args.Key
+	_, ok := n.Bucket[key]
+	if !ok {
+		return fmt.Errorf("Key not found")
+	}
+	delete(n.Bucket, key)
+	return nil
+}
+
+func (n *Node) Put(args *PutArgs, reply *PutReply) error {
+	key := args.Key
+	_, ok := n.Bucket[key]
+	if !ok {
+		return fmt.Errorf("Key not found")
+	}
+	n.Bucket[key] = args.Value
+	return nil
 }
 
 func (n *Node) stabilize() {
@@ -72,18 +115,20 @@ func find(id Key, start Node) Node {
 }
 
 func (n *Node) server() {
-	nrpc := &NodeRPC{n}
-	rpc.Register(nrpc)
+	rpc.Register(n)
 	rpc.HandleHTTP()
 	l, e := net.Listen("tcp", string(n.Address))
+	fmt.Println("Local node listening on ", n.Address)
 
 	if e != nil {
 		log.Fatal("listen error:", e)
 	}
 	http.Serve(l, nil)
+
 }
 
-func (n *Node) Ping(reply *string) error {
+func (n *Node) Ping(args *HostArgs, reply *string) error {
+	fmt.Println("INSIDE")
 	*reply = "Ping received"
 	return nil
 }

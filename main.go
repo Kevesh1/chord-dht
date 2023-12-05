@@ -3,9 +3,7 @@ package main
 import (
 	"bufio"
 	"fmt"
-	"log"
 	"net"
-	"net/rpc"
 	"os"
 	"os/exec"
 	"strings"
@@ -41,10 +39,11 @@ func main() {
 				fmt.Println("Usage: port <port>")
 				continue
 			}
-			adress := NodeAddress("0.0.0.0:" + args[1])
+			adress := NodeAddress("127.0.0.1:" + args[1])
 			createNode(&CreateNodeArgs{adress})
 			var reply string
-			call(adress, "Node.Ping", &HostArgs{}, &reply)
+			//time.Sleep(time.Second * 1)
+			//call(adress, "Node.Ping", &HostArgs{}, &reply)
 			fmt.Println("REPLY: ", reply)
 
 		case "create":
@@ -68,6 +67,7 @@ func main() {
 				fmt.Println("Usage: put <key> <value>")
 			}
 			fmt.Println("Puts key-value pair", args[1], args[2])
+			putRPC(NodeAddress(args[3]), Key(args[1]), args[2])
 
 		case "putrandom":
 			fmt.Println("Puts random key-value pair")
@@ -77,12 +77,14 @@ func main() {
 				fmt.Println("Usage: get <key>")
 			}
 			fmt.Println("Gets value for key", args[1])
+			getRPC(NodeAddress(args[2]), Key(args[1]))
 
 		case "delete":
 			if len(args) < 2 {
 				fmt.Println("Usage: delete <key>")
 			}
 			fmt.Println("Deletes key-value pair", args[1])
+			deleteRPC(NodeAddress(args[2]), Key(args[1]))
 
 		case "clear":
 			clearTerminal()
@@ -132,11 +134,9 @@ func joinRing(args *JoinArgs) *JoinReply {
 }
 
 func createNode(args *CreateNodeArgs) {
-	//TODO
 	fmt.Println("\nCreates new node", args.Address)
-	node := Node{Address: args.Address}
-	go node.server()
-	//return &CreateNodeReply{}
+	CreateNode(args)
+	return
 }
 
 func getNode(args *HostArgs) *HostReply {
@@ -144,21 +144,6 @@ func getNode(args *HostArgs) *HostReply {
 	fmt.Println("Hosts new node")
 	net.DialTCP("tcp", nil, &net.TCPAddr{IP: net.ParseIP(string(args.Address))})
 	return &HostReply{}
-}
-func call(address NodeAddress, method string, args interface{}, reply interface{}) bool {
-	c, err := rpc.DialHTTP("tcp", string(address))
-	if err != nil {
-		log.Fatal("dialing:", err)
-	}
-	defer c.Close()
-
-	err = c.Call(method, args, reply)
-	if err == nil {
-		return true
-	}
-
-	fmt.Println(err)
-	return false
 }
 
 func quit() {
