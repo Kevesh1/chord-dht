@@ -35,6 +35,11 @@ func deleteRPC(address NodeAddress, key Key) {
 	call(address, "Node.Delete", &GetArgs{Key: key}, &GetReply{})
 }
 
+// Calls Dump() inside node.go
+func dumpRPC(address NodeAddress) {
+	call(address, "Node.Dumb", &GetArgs{}, &GetReply{})
+}
+
 func call(address NodeAddress, method string, args interface{}, reply interface{}) bool {
 	c, err := rpc.DialHTTP("tcp", string(address))
 	if err != nil {

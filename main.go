@@ -90,7 +90,7 @@ func main() {
 			clearTerminal()
 
 		case "dump":
-			fmt.Println("Dumps information about current node")
+			dumpRPC(NodeAddress(args[1]))
 
 		default:
 			fmt.Println("Unknown command:", commandArg)

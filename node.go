@@ -46,6 +46,16 @@ func (n *Node) Get(args *GetArgs, reply *GetReply) error {
 	return nil
 }
 
+func (n *Node) Dump(args *GetArgs, reply *GetReply) error {
+	//Dumb all attributes of node n
+	fmt.Println("Address:", n.Address)
+	fmt.Println("FingerTable:", n.FingerTable)
+	fmt.Println("Predecessor:", n.Predecessor)
+	fmt.Println("Successors:", n.Successors)
+	fmt.Println("Bucket:", n.Bucket)
+	return nil
+}
+
 func (n *Node) Delete(args *DeleteArgs, reply *DeleteReply) error {
 	key := args.Key
 	_, ok := n.Bucket[key]
