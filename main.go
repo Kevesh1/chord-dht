@@ -32,45 +32,59 @@ func main() {
 		switch commandArg {
 		case "help":
 			printHelp()
+
 		case "port":
 			if len(args) < 2 {
 				fmt.Println("Usage: port <port>")
 				continue
 			}
-			fmt.Print("Port: " + args[1])
-		case "host":
-			fmt.Println("Hosts new node")
+			adress := NodeAdress("0.0.0.0:" + args[1])
+			createNode(&CreateNodeArgs{adress})
+			return
+
+		case "create":
+			fmt.Println("Creates new ring")
+
 		case "join":
 			if len(args) < 2 {
-				fmt.Println("Usage: join <node>")
+				fmt.Println("Usage: join <address>")
 				continue
 			}
 			fmt.Println("Joins existing node", args[1])
+
 		case "quit":
-			fmt.Println("Quitting program.")
-			return
+			quit()
+
+		case "host":
+			fmt.Println("Hosts new node")
+
 		case "put":
 			if len(args) < 3 {
 				fmt.Println("Usage: put <key> <value>")
-				continue
 			}
 			fmt.Println("Puts key-value pair", args[1], args[2])
+
 		case "putrandom":
 			fmt.Println("Puts random key-value pair")
+
 		case "get":
 			if len(args) < 2 {
 				fmt.Println("Usage: get <key>")
-				continue
 			}
 			fmt.Println("Gets value for key", args[1])
+
 		case "delete":
 			if len(args) < 2 {
 				fmt.Println("Usage: delete <key>")
-				continue
 			}
 			fmt.Println("Deletes key-value pair", args[1])
+
 		case "clear":
 			clearTerminal()
+
+		case "dump":
+			fmt.Println("Dumps information about current node")
+
 		default:
 			fmt.Println("Unknown command:", commandArg)
 			fmt.Println("Use 'help' for more information")
@@ -81,19 +95,46 @@ func main() {
 func printHelp() {
 	fmt.Println("Commands:")
 	fmt.Println("1. help - prints this help message")
-	fmt.Println("2. port <port> - prints the port number of the node")
-	fmt.Println("3. host - hosts a new node")
+	fmt.Println("2. port <n> - set the port that this node should listen on. (Default :3410)")
+	fmt.Println("3. create - creates a new ring")
 	fmt.Println("4. join <node> - joins an existing node")
-	fmt.Println("5. quit - quits all nodes")
-	fmt.Println("6. put <key> <value> - puts a key-value pair")
-	fmt.Println("7. putrandom - puts a random key-value pair")
-	fmt.Println("8. get <key> - gets the value for a key")
-	fmt.Println("9. delete <key> - deletes a key-value pair")
-	fmt.Println("10. clear - clears the terminal screen")
+	fmt.Println("5. quit - shut down. Ends the program.")
+	fmt.Println("6. host - hosts a new node")
+	fmt.Println("7. put <key> <value> - puts a key-value pair into the current ring")
+	fmt.Println("8. putrandom - puts a random key-value pair")
+	fmt.Println("9. get <key> - gets the value for a key")
+	fmt.Println("10. delete <key> - deletes a key-value pair")
+	fmt.Println("11. clear - clears the terminal screen")
+	fmt.Println("12. dump - display information about the current node, used for debug")
 }
 
 func clearTerminal() {
 	cmd := exec.Command("clear") // Use "clear" for Unix-like systems, "cls" for Windows
 	cmd.Stdout = os.Stdout
 	cmd.Run()
+}
+
+func createRing(args *CreateArgs) *CreateReply {
+	//TODO
+	fmt.Println("Creates new ring")
+	return &CreateReply{}
+}
+
+func joinRing(args *JoinArgs) *JoinReply {
+	//TODO
+	fmt.Println("Joins existing node", args.Address)
+	return &JoinReply{}
+}
+
+func createNode(args *CreateNodeArgs) *CreateNodeReply {
+	//TODO
+	fmt.Println("\nCreates new node", args.Address)
+	node := Node{Address: args.Address}
+	go node.server()
+	return &CreateNodeReply{}
+}
+
+func quit() {
+	fmt.Println("Quitting program.")
+	os.Exit(0)
 }
