@@ -66,7 +66,7 @@ func call(address string, method string, request interface{}, reply interface{})
 }
 
 func (n *Node) getLocalAddress() string {
-	conn, err := net.Dial("udp", "0.0.0.0:80")
+	conn, err := net.Dial("tcp", "0.0.0.0:"+string(n.Address))
 	if err != nil {
 		log.Fatal(err)
 	}

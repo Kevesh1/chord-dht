@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"fmt"
+	"net"
 	"os"
 	"os/exec"
 	"strings"
@@ -40,7 +41,6 @@ func main() {
 			}
 			adress := NodeAdress("0.0.0.0:" + args[1])
 			createNode(&CreateNodeArgs{adress})
-			return
 
 		case "create":
 			fmt.Println("Creates new ring")
@@ -134,7 +134,14 @@ func createNode(args *CreateNodeArgs) *CreateNodeReply {
 	return &CreateNodeReply{}
 }
 
+func getNode(args *HostArgs) *HostReply {
+	//TODO
+	fmt.Println("Hosts new node")
+	net.DialTCP("tcp", nil, &net.TCPAddr{IP: net.ParseIP(string(args.Address))})
+	return &HostReply{}
+}
+
 func quit() {
-	fmt.Println("Quitting program.")
+	fmt.Println("\nQuitting program.")
 	os.Exit(0)
 }

@@ -26,6 +26,7 @@ type PortReply struct {
 }
 
 type HostArgs struct {
+	Address NodeAdress
 }
 
 type HostReply struct {
