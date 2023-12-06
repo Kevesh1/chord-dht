@@ -37,7 +37,11 @@ func deleteRPC(address NodeAddress, key Key) {
 
 // Calls Dump() inside node.go
 func dumpRPC(address NodeAddress) {
-	call(address, "Node.Dumb", &GetArgs{}, &GetReply{})
+	call(address, "Node.Dump", &GetArgs{}, &GetReply{})
+}
+
+func joinRPC(address, joinAddress NodeAddress) {
+	call(address, "Node.Join", &JoinArgs{Address: joinAddress}, &JoinReply{})
 }
 
 func call(address NodeAddress, method string, args interface{}, reply interface{}) bool {

@@ -32,7 +32,7 @@ type HostReply struct {
 }
 
 type JoinArgs struct {
-	Address string
+	Address NodeAddress
 }
 
 type JoinReply struct {
@@ -66,4 +66,9 @@ type DumpArgs struct {
 
 type DumpReply struct {
 	//TODO dumb all the fields from the node
+}
+
+type FindSuccReply struct {
+	Address NodeAddress
+	Found   bool
 }

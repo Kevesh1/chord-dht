@@ -14,6 +14,7 @@ func main() {
 
 	// Create a scanner to read input from the console
 	scanner := bufio.NewScanner(os.Stdin)
+	var ipAdd NodeAddress
 
 	// Run the program continuously until the "quit" command is entered
 	for {
@@ -40,6 +41,7 @@ func main() {
 				continue
 			}
 			adress := NodeAddress("127.0.0.1:" + args[1])
+			ipAdd = adress
 			createNode(&CreateNodeArgs{adress})
 			var reply string
 			//time.Sleep(time.Second * 1)
@@ -54,6 +56,7 @@ func main() {
 				fmt.Println("Usage: join <address>")
 				continue
 			}
+			joinRPC(ipAdd, NodeAddress(args[1]))
 			fmt.Println("Joins existing node", args[1])
 
 		case "quit":
