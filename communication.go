@@ -41,8 +41,7 @@ func dumpRPC(address NodeAddress) {
 }
 
 func joinRPC(address, joinAddress NodeAddress) {
-	fmt.Printf("type of a is %T\n", joinAddress)
-	call(address, "Node.Join", &JoinArgs{Address: joinAddress}, &JoinReply{})
+	call(address, "Node.Join", joinAddress, &JoinReply{})
 }
 
 func getPredecessorRPC(address NodeAddress) {

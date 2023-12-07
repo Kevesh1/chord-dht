@@ -44,7 +44,7 @@ func CreateNode(args *CreateNodeArgs) {
 		Successors: make([]NodeAddress, nSuccessors),
 	}
 	// node.Id.Mod(node.Id, hashMod)
-	// node.create()
+	node.create()
 	node.Bucket["state"] = "abcd"
 	go node.server()
 	//testRPC(args)
@@ -95,7 +95,10 @@ func (n *Node) Put(args *PutArgs, reply *PutReply) error {
 // Create chord ring
 func (n *Node) create() {
 	n.Predecessor = ""
-	n.Successors = append(n.Successors, n.Address)
+	n.Successors[0] = n.Address
+	fmt.Println(n.Successors)
+	fmt.Println(len(n.Successors))
+	fmt.Println(n.Successors[0])
 	//n.find_successor()
 }
 
@@ -107,30 +110,20 @@ func (n *Node) checkPredecessor() {
 
 }
 
-func (n *Node) Join(args *JoinArgs, r *JoinReply) error {
-
-	nodeToJoin := args.Address
+func (n *Node) Join(nodeToJoin NodeAddress, r *JoinReply) error {
 
 	n.Predecessor = ""
 
-	//nodeToJoin := args.Address
+	//n.Successors[0] = nodeToJoin
+	NodeId := hashString(string(n.Address))
+	NodeId.Mod(NodeId, hashMod)
 
-	//successor := nodeToJoin.find_successor(Key(n.Address))
-	//successor := nodeToJoin.Address
-	//n.Successors = append(n.Successors, nodeToJoin)
-
-	//This one is the pre-RPC one
-
-	//n.Successors = slices.Insert(n.Successors, 0, nodeToJoin)
-	n.Successors[0] = nodeToJoin
-
-	// THIS CODE IS FOR WEEK 2 IMPLEMENTATION
-	// var reply FindSuccReply
-	// ok := call(joinNode, "Node.Find_successor", n.Address, &reply)
-	// if ok != true {
-	// 	fmt.Println("ERROR")
-	// }
-	// n.Successors[0] = reply.Address
+	var reply FindSuccReply
+	ok := call(nodeToJoin, "Node.Find_successor", n.Address, &reply)
+	if ok != true {
+		fmt.Println("ERROR")
+	}
+	n.Successors[0] = reply.Address
 	return nil
 }
 
@@ -139,16 +132,25 @@ func (n *Node) GetPredecessor(none *struct{}, reply *AddressReply) error {
 	return nil
 }
 
-func (n *Node) Find_successor(id Key, reply *FindSuccReply) error {
+func (n *Node) Find_successor(nodeToBeJoinedOn NodeAddress, reply *FindSuccReply) error {
 	successor := n.Successors[0]
-	if string(n.Address) == string(id) || string(successor) == string(id) {
+	fmt.Println("FIRST INDEX: ", successor)
+	fmt.Println("SECOND INDEX: ", n.Successors[1])
+	nodeId := hashString(string(n.Address))
+	nodeId.Mod(nodeId, hashMod)
+	nodeToBeJoinedOnID := hashString(string(nodeToBeJoinedOn))
+	nodeToBeJoinedOnID.Mod(nodeToBeJoinedOnID, hashMod)
+	successorID := hashString(string(successor))
+	successorID.Mod(successorID, hashMod)
+
+	if between(nodeId, nodeToBeJoinedOnID, successorID, false) {
 		reply.Address = successor
 		reply.Found = true
 		return nil
 	} else {
 		fmt.Println("[DEBUG node.FindSuccessor()] Calling for next node: ", successor)
-		call(successor, "Node.Find_successor", id, &FindSuccReply{})
-		reply.Address = ""
+		call(successor, "Node.Find_successor", nodeToBeJoinedOn, &FindSuccReply{})
+		reply.Address = "AAAAA"
 		reply.Found = false
 		//return n.find_successor(id)
 		//return false, Node{Address: n.closest_preceding_node(id)}
@@ -156,15 +158,17 @@ func (n *Node) Find_successor(id Key, reply *FindSuccReply) error {
 	return nil
 }
 
-func find(id *big.Int, start NodeAddress) NodeAddress {
+func find(start NodeAddress) NodeAddress {
 	found, nextNode := false, start
 	maxSteps := 32
 	i := 0
 
 	for !found && i < maxSteps {
+		nodeId := hashString(string(nextNode))
+		nodeId.Mod(nodeId, hashMod)
 		result := FindSuccReply{}
 		fmt.Println("[DEBUG node.find()] Calling for next node: ", nextNode)
-		ok := call(nextNode, "Node.Find_successor", id, &result)
+		ok := call(nextNode, "Node.Find_successor", nodeId, &result)
 		if ok != true {
 			fmt.Println("Error in Node.find(): ")
 		}

@@ -56,7 +56,6 @@ func main() {
 				fmt.Println("Usage: join <address>")
 				continue
 			}
-			fmt.Printf("type of a is %T\n", ipAdd)
 			joinRPC(ipAdd, NodeAddress(args[1]))
 			fmt.Println("Joins existing node", args[1])
 
