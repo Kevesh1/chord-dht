@@ -2,6 +2,7 @@ package main
 
 import (
 	"crypto/sha1"
+	"errors"
 	"math/big"
 )
 
@@ -29,4 +30,14 @@ func between(start, elt, end *big.Int, inclusive bool) bool {
 	} else {
 		return start.Cmp(elt) < 0 || elt.Cmp(end) < 0 || (inclusive && elt.Cmp(end) == 0)
 	}
+}
+
+func ClientLookup(key Key, nodeAdr NodeAddress) (NodeAddress, error) {
+	newKey := hashString(string(key))
+	addr := find(newKey, nodeAdr)
+
+	if addr == "-1" {
+		return "", errors.New("Key not found")
+	}
+	return NodeAddress(addr), nil
 }
