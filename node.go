@@ -45,7 +45,7 @@ func CreateNode(args *CreateNodeArgs) {
 	// node.create()
 	node.Bucket["state"] = "abcd"
 	go node.server()
-	testRPC(args)
+	//testRPC(args)
 	return
 }
 
@@ -145,6 +145,7 @@ func (n *Node) Find_successor(id Key, reply *FindSuccReply) error {
 		reply.Found = true
 		return nil
 	} else {
+		fmt.Println("[DEBUG node.FindSuccessor()] Calling for next node: ", successor)
 		call(successor, "Node.Find_successor", id, &FindSuccReply{})
 		reply.Address = ""
 		reply.Found = false
@@ -154,26 +155,33 @@ func (n *Node) Find_successor(id Key, reply *FindSuccReply) error {
 	return nil
 }
 
+func find(id *big.Int, start NodeAddress) NodeAddress {
+	found, nextNode := false, start
+	maxSteps := 32
+	i := 0
+
+	for !found && i < maxSteps {
+		result := FindSuccReply{}
+		fmt.Println("[DEBUG node.find()] Calling for next node: ", nextNode)
+		ok := call(nextNode, "Node.Find_successor", id, &result)
+		if ok != true {
+			fmt.Println("Error in Node.find(): ")
+		}
+		found = result.Found
+		nextNode = result.Address
+		i++
+	}
+	if found {
+		return nextNode
+	}
+	return "-1"
+}
+
 func (n *Node) closest_preceding_node(id Key) NodeAddress {
 	//TODO:
 	//FINGERTABLE LOGIC
 	var hash NodeAddress = ""
 	return hash
-}
-
-func find(id Key, start Node) Node {
-	found, nextNode := false, start
-	maxSteps := 32
-	i := 0
-	for found == false && i < maxSteps {
-		//found, nextNode = nextNode.find_successor(id)
-		i++
-	}
-	if found {
-		return nextNode
-	} else {
-		panic("error")
-	}
 }
 
 func (n *Node) server() {
