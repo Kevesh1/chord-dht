@@ -76,3 +76,7 @@ type FindSuccReply struct {
 type AddressReply struct {
 	Address NodeAddress
 }
+
+type SuccessorsListReply struct {
+	Successors []NodeAddress
+}

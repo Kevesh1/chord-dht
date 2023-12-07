@@ -23,6 +23,8 @@ var fingerTableSize = 6 // Each finger table i contains the id of (n + 2^i) mod 
 // 2^m
 var hashMod *big.Int = new(big.Int).Exp(big.NewInt(2), big.NewInt(int64(MODULO)), nil)
 
+var nSuccessors int = 3
+
 type Node struct {
 	//Id *big.Int
 
@@ -39,7 +41,7 @@ func CreateNode(args *CreateNodeArgs) {
 		//Id:         hashString(string(args.Address)),
 		Address:    args.Address,
 		Bucket:     make(map[Key]string),
-		Successors: make([]NodeAddress, 1),
+		Successors: make([]NodeAddress, nSuccessors),
 	}
 	// node.Id.Mod(node.Id, hashMod)
 	// node.create()
@@ -120,7 +122,6 @@ func (n *Node) Join(args *JoinArgs, r *JoinReply) error {
 	//This one is the pre-RPC one
 
 	//n.Successors = slices.Insert(n.Successors, 0, nodeToJoin)
-	n.Successors = make([]NodeAddress, 1)
 	n.Successors[0] = nodeToJoin
 
 	// THIS CODE IS FOR WEEK 2 IMPLEMENTATION
@@ -133,7 +134,7 @@ func (n *Node) Join(args *JoinArgs, r *JoinReply) error {
 	return nil
 }
 
-func (n *Node) GetPredecessor(reply *AddressReply) error {
+func (n *Node) GetPredecessor(none *struct{}, reply *AddressReply) error {
 	reply.Address = n.Predecessor
 	return nil
 }
@@ -189,8 +190,37 @@ func (n *Node) server() {
 
 }
 
+func (n *Node) GetSuccessors(none *struct{}, reply *SuccessorsListReply) error {
+	reply.Successors = n.Successors
+	return nil
+}
+
 func (n *Node) stabilize() {
 	successor := n.Successors[0]
+
+	var successorsReply SuccessorsListReply
+	ok := call(successor, "Node.GetSuccessors", struct{}{}, &successorsReply)
+	successors := successorsReply.Successors
+	if ok {
+		for i := 0; i < len(successor)-1; i++ {
+			n.Successors[i+1] = successors[i]
+		}
+	} else {
+		fmt.Println("GetSuccessors failed")
+		if successor == "" {
+			fmt.Println("Successor is empty, setting successor address to itself")
+			n.Successors[0] = n.Address
+		} else {
+			for i := 0; i < len(n.Successors); i++ {
+				if i == len(n.Successors)-1 {
+					n.Successors[i] = ""
+				} else {
+					n.Successors[i] = n.Successors[i+1]
+				}
+			}
+		}
+	}
+
 	var reply AddressReply
 	call(successor, "Node.GetPredecessor", struct{}{}, &reply)
 	predecessor := reply.Address
