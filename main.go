@@ -42,7 +42,7 @@ func main() {
 			}
 			adress := NodeAddress("127.0.0.1:" + args[1])
 			ipAdd = adress
-			createNode(&CreateNodeArgs{adress})
+			createNode(&CreateNodeArgs{Address: adress})
 			var reply string
 			//time.Sleep(time.Second * 1)
 			//call(adress, "Node.Ping", &HostArgs{}, &reply)
@@ -56,6 +56,7 @@ func main() {
 				fmt.Println("Usage: join <address>")
 				continue
 			}
+			fmt.Printf("type of a is %T\n", ipAdd)
 			joinRPC(ipAdd, NodeAddress(args[1]))
 			fmt.Println("Joins existing node", args[1])
 

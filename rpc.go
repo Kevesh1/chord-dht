@@ -72,3 +72,7 @@ type FindSuccReply struct {
 	Address NodeAddress
 	Found   bool
 }
+
+type AddressReply struct {
+	Address NodeAddress
+}

@@ -3,10 +3,10 @@ package main
 import (
 	"fmt"
 	"log"
+	"math/big"
 	"net"
 	"net/http"
 	"net/rpc"
-	"slices"
 	"time"
 )
 
@@ -14,9 +14,18 @@ type Key string
 
 type NodeAddress string
 
-var MODULO int = 5
+// 2^6 spots --> 64 id's
+var MODULO int = 6
+
+var fingerTableSize = 6 // Each finger table i contains the id of (n + 2^i) mod (2^m)th node.
+// Use [1, 6] as i and space would be [(n+1)%64, (n+32)%64]
+
+// 2^m
+var hashMod *big.Int = new(big.Int).Exp(big.NewInt(2), big.NewInt(int64(MODULO)), nil)
 
 type Node struct {
+	//Id *big.Int
+
 	Address     NodeAddress
 	FingerTable []NodeAddress
 	Predecessor NodeAddress
@@ -27,10 +36,13 @@ type Node struct {
 
 func CreateNode(args *CreateNodeArgs) {
 	node := Node{
-		Address: args.Address,
-		Bucket:  make(map[Key]string),
+		//Id:         hashString(string(args.Address)),
+		Address:    args.Address,
+		Bucket:     make(map[Key]string),
+		Successors: make([]NodeAddress, 1),
 	}
-	node.create()
+	// node.Id.Mod(node.Id, hashMod)
+	// node.create()
 	node.Bucket["state"] = "abcd"
 	go node.server()
 	testRPC(args)
@@ -85,15 +97,6 @@ func (n *Node) create() {
 	//n.find_successor()
 }
 
-// func (n *Node) stabilize() {
-// 	x := n.Successors[0].Predecessor
-// 	if x == n || x == n.Successors[0] {
-// 		n.Successors[0] = x
-// 	}
-// 	//fmt.Print(successor)
-
-// }
-
 func (n *Node) fixFingers() {
 
 }
@@ -102,8 +105,12 @@ func (n *Node) checkPredecessor() {
 
 }
 
-func (n *Node) Join(nodeToJoin NodeAddress, r *JoinReply) error {
+func (n *Node) Join(args *JoinArgs, r *JoinReply) error {
+
+	nodeToJoin := args.Address
+
 	n.Predecessor = ""
+
 	//nodeToJoin := args.Address
 
 	//successor := nodeToJoin.find_successor(Key(n.Address))
@@ -111,7 +118,10 @@ func (n *Node) Join(nodeToJoin NodeAddress, r *JoinReply) error {
 	//n.Successors = append(n.Successors, nodeToJoin)
 
 	//This one is the pre-RPC one
-	n.Successors = slices.Insert(n.Successors, 0, nodeToJoin)
+
+	//n.Successors = slices.Insert(n.Successors, 0, nodeToJoin)
+	n.Successors = make([]NodeAddress, 1)
+	n.Successors[0] = nodeToJoin
 
 	// THIS CODE IS FOR WEEK 2 IMPLEMENTATION
 	// var reply FindSuccReply
@@ -120,6 +130,11 @@ func (n *Node) Join(nodeToJoin NodeAddress, r *JoinReply) error {
 	// 	fmt.Println("ERROR")
 	// }
 	// n.Successors[0] = reply.Address
+	return nil
+}
+
+func (n *Node) GetPredecessor(reply *AddressReply) error {
+	reply.Address = n.Predecessor
 	return nil
 }
 
@@ -174,6 +189,41 @@ func (n *Node) server() {
 
 }
 
+func (n *Node) stabilize() {
+	successor := n.Successors[0]
+	var reply AddressReply
+	call(successor, "Node.GetPredecessor", struct{}{}, &reply)
+	predecessor := reply.Address
+	nodeId := hashString(string(n.Address))
+	nodeId.Mod(nodeId, hashMod)
+	predecessorID := hashString(string(predecessor))
+	predecessorID.Mod(predecessorID, hashMod)
+	successorID := hashString(string(successor))
+	successorID.Mod(successorID, hashMod)
+
+	if between(nodeId, predecessorID, successorID, false) {
+		n.Successors[0] = predecessor
+	}
+	call(successor, "node.Notify", n.Address, struct{}{})
+	//fmt.Print(successor)
+
+}
+
+func (n *Node) Notify(address NodeAddress) {
+	predecessorID := hashString(string(n.Predecessor))
+	predecessorID.Mod(predecessorID, hashMod)
+
+	addressID := hashString(string(address))
+	addressID.Mod(addressID, hashMod)
+
+	nodeId := hashString(string(n.Address))
+	nodeId.Mod(nodeId, hashMod)
+
+	if n.Predecessor == "" || between(predecessorID, addressID, nodeId, false) {
+		n.Predecessor = address
+	}
+}
+
 func (n *Node) Ping(args *HostArgs, reply *string) error {
 	fmt.Println("INSIDE")
 	*reply = "Ping received"
@@ -183,7 +233,7 @@ func (n *Node) Ping(args *HostArgs, reply *string) error {
 func (n *Node) check() {
 	go func() {
 		for {
-			//n.stabilize()
+			n.stabilize()
 			time.Sleep(time.Second * (1 / 3))
 			n.fixFingers()
 			time.Sleep(time.Second * (1 / 3))
