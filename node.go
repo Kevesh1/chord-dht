@@ -140,20 +140,31 @@ func (n *Node) checkPredecessor() {
 
 }
 
-func (n *Node) Join(nodeToJoin NodeAddress, r *JoinReply) error {
+func (n *Node) Join(newNode NodeAddress, r *JoinReply) error {
 
 	n.Predecessor = ""
 
 	//n.Successors[0] = nodeToJoin
 	nodeId := hashString(string(n.Address))
+	newNodeId := hashString(string(newNode))
 	nodeId.Mod(nodeId, hashMod)
 
 	var reply FindSuccReply
-	ok := call(nodeToJoin, "Node.Find_successor", nodeId, &reply)
+	ok := call(newNode, "Node.Find_successor", nodeId, &reply)
 	if ok != true {
 		fmt.Println("ERROR")
 	}
-	n.Successors[0] = reply.Address
+	if reply.Found {
+		n.Successors[0] = reply.Address
+	} else {
+		fmt.Println("No successor was found, setting successor as itself")
+		n.Successors[0] = n.Address
+	}
+	if between(nodeId, newNodeId, hashString(string(n.Successors[0])), false) || n.Successors[0] == n.Address {
+		n.Successors[0] = newNode
+	} else {
+		call(n.Successors[0], "Node.Join", newNode, &JoinReply{})
+	}
 	return nil
 }
 
@@ -162,30 +173,29 @@ func (n *Node) GetPredecessor(none *struct{}, reply *AddressReply) error {
 	return nil
 }
 
+// @params: requestID is the current node whos succesor we want to find
+// @params: reply is the address of the successor node if one is found
 func (n *Node) Find_successor(requestID *big.Int, reply *FindSuccReply) error {
+
 	successor := n.Successors[0]
-	// fmt.Println("FIRST INDEX: ", successor)
-	// fmt.Println("SECOND INDEX: ", n.Successors[1])
 	nodeId := hashString(string(n.Address))
+	successorId := hashString(string(successor))
 	nodeId.Mod(nodeId, hashMod)
+	successorId.Mod(successorId, hashMod)
 
-	successorID := hashString(string(successor))
-	successorID.Mod(successorID, hashMod)
+	recordHash(nodeId, successorId, requestID)
 
-	if between(nodeId, requestID, successorID, true) {
+	if between(nodeId, requestID, successorId, true) {
 		reply.Address = successor
 		reply.Found = true
 		return nil
 	} else {
+
 		fmt.Println("[DEBUG node.FindSuccessor()] Calling for next node: ", successor)
 		call(successor, "Node.Find_successor", requestID, &FindSuccReply{})
-		fmt.Println("INSIDE ELSE")
-		fmt.Println(successor)
 		reply.Address = successor
 		reply.Found = false
 
-		//return n.find_successor(id)
-		//return false, Node{Address: n.closest_preceding_node(id)}
 	}
 	return nil
 }
@@ -210,8 +220,10 @@ func find(requestID *big.Int, start NodeAddress) NodeAddress {
 		i++
 	}
 	if found {
+		fmt.Println("[DEBUG node.find()] Found node A: ", nextNode)
 		return nextNode
 	}
+	fmt.Println("[DEBUG node.find()] Node not found B")
 	return "-1"
 }
 
@@ -231,8 +243,8 @@ func (n *Node) server() {
 	if e != nil {
 		log.Fatal("listen error:", e)
 	}
+	n.stabilize()
 	http.Serve(l, nil)
-
 }
 
 func (n *Node) GetSuccessors(none *struct{}, reply *SuccessorsListReply) error {
@@ -242,7 +254,6 @@ func (n *Node) GetSuccessors(none *struct{}, reply *SuccessorsListReply) error {
 
 func (n *Node) stabilize() {
 	successor := n.Successors[0]
-
 	var successorsReply SuccessorsListReply
 	ok := call(successor, "Node.GetSuccessors", &struct{}{}, &successorsReply)
 	successors := successorsReply.Successors
@@ -260,6 +271,7 @@ func (n *Node) stabilize() {
 			fmt.Println("Successor is empty, setting successor address to itself")
 			n.Successors[0] = n.Address
 		} else {
+			fmt.Println("Successor is not empty, removing successor AIUFEBIUEIFU")
 			for i := 0; i < len(n.Successors); i++ {
 				if i == len(n.Successors)-1 {
 					n.Successors[i] = ""
@@ -287,6 +299,7 @@ func (n *Node) stabilize() {
 	call(successor, "node.Notify", n.Address, &struct{}{})
 	//fmt.Print(successor)
 }
+
 func (n *Node) Notify(address NodeAddress, none *struct{}) error {
 	predecessorID := hashString(string(n.Predecessor))
 	predecessorID.Mod(predecessorID, hashMod)
@@ -302,7 +315,6 @@ func (n *Node) Notify(address NodeAddress, none *struct{}) error {
 	}
 	return nil
 }
-
 func (n *Node) Ping(args *HostArgs, reply *string) error {
 	fmt.Println("INSIDE")
 	*reply = "Ping received"
