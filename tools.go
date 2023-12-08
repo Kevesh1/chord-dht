@@ -32,7 +32,7 @@ func between(start, elt, end *big.Int, inclusive bool) bool {
 	}
 }
 
-func ClientLookup(key Key, nodeAdr NodeAddress) (NodeAddress, error) {
+func ClientLookup(nodeAdr NodeAddress) (NodeAddress, error) {
 	addr := find(nodeAdr)
 
 	if addr == "-1" {

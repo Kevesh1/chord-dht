@@ -162,7 +162,7 @@ func lookup(args []string, ipadress NodeAddress) {
 		fmt.Println("Usage: lookup <key>")
 	} else {
 		key := Key(args[1])
-		result, err := ClientLookup(key, ipadress)
+		result, err := ClientLookup(ipadress)
 		if err != nil {
 			fmt.Println("Error:", err)
 		} else {
