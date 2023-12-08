@@ -45,7 +45,7 @@ func CreateNode(args *CreateNodeArgs) {
 	node.create()
 	node.Bucket["state"] = "abcd"
 	go node.server()
-	node.stabilize()
+	//node.stabilize()
 	//testRPC(args)
 	return
 }
@@ -146,7 +146,6 @@ func (n *Node) Join(newNode NodeAddress, r *JoinReply) error {
 
 	//n.Successors[0] = nodeToJoin
 	nodeId := hashString(string(n.Address))
-	newNodeId := hashString(string(newNode))
 	nodeId.Mod(nodeId, hashMod)
 
 	var reply FindSuccReply
@@ -154,17 +153,13 @@ func (n *Node) Join(newNode NodeAddress, r *JoinReply) error {
 	if ok != true {
 		fmt.Println("ERROR")
 	}
-	if reply.Found {
-		n.Successors[0] = reply.Address
-	} else {
-		fmt.Println("No successor was found, setting successor as itself")
-		n.Successors[0] = n.Address
-	}
-	if between(nodeId, newNodeId, hashString(string(n.Successors[0])), false) || n.Successors[0] == n.Address {
-		n.Successors[0] = newNode
-	} else {
-		call(n.Successors[0], "Node.Join", newNode, &JoinReply{})
-	}
+	n.Successors[0] = reply.Address
+
+	// if between(nodeId, newNodeId, hashString(string(n.Successors[0])), false) || n.Successors[0] == n.Address {
+	// 	n.Successors[0] = newNode
+	// } else {
+	// 	call(n.Successors[0], "Node.Join", newNode, &JoinReply{})
+	// }
 	return nil
 }
 
@@ -243,8 +238,8 @@ func (n *Node) server() {
 	if e != nil {
 		log.Fatal("listen error:", e)
 	}
-	n.stabilize()
 	http.Serve(l, nil)
+	n.stabilize()
 }
 
 func (n *Node) GetSuccessors(none *struct{}, reply *SuccessorsListReply) error {
@@ -296,7 +291,7 @@ func (n *Node) stabilize() {
 	if between(nodeId, predecessorID, successorID, false) {
 		n.Successors[0] = predecessor
 	}
-	call(successor, "node.Notify", n.Address, &struct{}{})
+	call(successor, "Node.Notify", n.Address, &struct{}{})
 	//fmt.Print(successor)
 }
 
