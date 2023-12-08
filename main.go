@@ -70,7 +70,7 @@ func main() {
 				fmt.Println("Usage: put <key> <value>")
 			}
 			fmt.Println("Puts key-value pair", args[1], args[2])
-			putRPC(NodeAddress(args[3]), Key(args[1]), args[2])
+			putRPC(ipAdd, Key(args[1]), args[2])
 
 		case "putrandom":
 			fmt.Println("Puts random key-value pair")
@@ -81,9 +81,6 @@ func main() {
 			}
 			fmt.Println("Gets value for key", args[1])
 			getRPC(NodeAddress(args[2]), Key(args[1]))
-
-		case "lookup":
-			lookup(args, ipAdd)
 
 		case "delete":
 			if len(args) < 2 {
@@ -155,19 +152,4 @@ func getNode(args *HostArgs) *HostReply {
 func quit() {
 	fmt.Println("\nQuitting program.")
 	os.Exit(0)
-}
-
-func lookup(args []string, ipadress NodeAddress) {
-	if len(args) < 2 {
-		fmt.Println("Usage: lookup <key>")
-	} else {
-		key := Key(args[1])
-		result, err := ClientLookup(ipadress)
-		if err != nil {
-			fmt.Println("Error:", err)
-		} else {
-			fmt.Println("Key", key, "is stored at", result)
-		}
-
-	}
 }

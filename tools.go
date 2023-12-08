@@ -32,8 +32,10 @@ func between(start, elt, end *big.Int, inclusive bool) bool {
 	}
 }
 
-func ClientLookup(nodeAdr NodeAddress) (NodeAddress, error) {
-	addr := find(nodeAdr)
+func ClientLookup(key Key, nodeAdr NodeAddress) (NodeAddress, error) {
+	keyId := hashString(string(key))
+	keyId.Mod(keyId, hashMod)
+	addr := find(keyId, nodeAdr)
 
 	if addr == "-1" {
 		return "", errors.New("Key not found")

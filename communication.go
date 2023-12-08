@@ -21,13 +21,13 @@ func testRPC(args *CreateNodeArgs) {
 // Calls Get() inside node.go
 // These 3 methods work as the middleman atm
 func getRPC(address NodeAddress, key Key) {
-	addr, err := ClientLookup(address)
+	addr, err := ClientLookup(key, address)
 	if err != nil {
 		fmt.Println("[DEBUG node.Put()] Error in ClientLookup(): ", err)
 	} else {
 		fmt.Println("[DEBUG node.Put()] Found address: ", addr)
 	}
-	ok := call(address, "Node.Get", &GetArgs{Key: key}, &GetReply{})
+	ok := call(addr, "Node.Get", &GetArgs{Key: key}, &GetReply{})
 	if !ok {
 		fmt.Println("[DEBUG node.Put()] Error in call(): ", err)
 	} else {
@@ -37,13 +37,13 @@ func getRPC(address NodeAddress, key Key) {
 
 // Calls Put() inside node.go
 func putRPC(address NodeAddress, key Key, value string) {
-	addr, err := ClientLookup(address)
+	addr, err := ClientLookup(key, address)
 	if err != nil {
 		fmt.Println("[DEBUG node.Put()] Error in ClientLookup(): ", err)
 	} else {
 		fmt.Println("[DEBUG node.Put()] Found address: ", addr)
 	}
-	ok := call(address, "Node.Put", &PutArgs{Key: key, Value: value}, &PutReply{})
+	ok := call(addr, "Node.Put", &PutArgs{Key: key, Value: value}, &PutReply{})
 	if !ok {
 		fmt.Println("[DEBUG node.Put()] Error in call(): ", err)
 	} else {
@@ -53,13 +53,13 @@ func putRPC(address NodeAddress, key Key, value string) {
 
 // Calls Delete() inside node.go
 func deleteRPC(address NodeAddress, key Key) {
-	addr, err := ClientLookup(address)
+	addr, err := ClientLookup(key, address)
 	if err != nil {
 		fmt.Println("[DEBUG node.Put()] Error in ClientLookup(): ", err)
 	} else {
 		fmt.Println("[DEBUG node.Put()] Found address: ", addr)
 	}
-	ok := call(address, "Node.Delete", &GetArgs{Key: key}, &GetReply{})
+	ok := call(addr, "Node.Delete", &GetArgs{Key: key}, &GetReply{})
 	if !ok {
 		fmt.Println("[DEBUG node.Put()] Error in call(): ", err)
 	} else {

@@ -81,10 +81,10 @@ func (n *Node) Delete(args *DeleteArgs, reply *DeleteReply) error {
 
 func (n *Node) Put(args *PutArgs, reply *PutReply) error {
 	key := args.Key
-	_, ok := n.Bucket[key]
-	if !ok {
-		return fmt.Errorf("Key not found")
-	}
+	// _, ok := n.Bucket[key]
+	// if !ok {
+	// 	return fmt.Errorf("Key not found")
+	// }
 	n.Bucket[key] = args.Value
 	return nil
 }
@@ -112,11 +112,11 @@ func (n *Node) Join(nodeToJoin NodeAddress, r *JoinReply) error {
 	n.Predecessor = ""
 
 	//n.Successors[0] = nodeToJoin
-	NodeId := hashString(string(n.Address))
-	NodeId.Mod(NodeId, hashMod)
+	nodeId := hashString(string(n.Address))
+	nodeId.Mod(nodeId, hashMod)
 
 	var reply FindSuccReply
-	ok := call(nodeToJoin, "Node.Find_successor", n.Address, &reply)
+	ok := call(nodeToJoin, "Node.Find_successor", nodeId, &reply)
 	if ok != true {
 		fmt.Println("ERROR")
 	}
@@ -129,43 +129,46 @@ func (n *Node) GetPredecessor(none *struct{}, reply *AddressReply) error {
 	return nil
 }
 
-func (n *Node) Find_successor(nodeToBeJoinedOn NodeAddress, reply *FindSuccReply) error {
+func (n *Node) Find_successor(requestID *big.Int, NodeAddress, reply *FindSuccReply) error {
 	successor := n.Successors[0]
 	fmt.Println("FIRST INDEX: ", successor)
 	fmt.Println("SECOND INDEX: ", n.Successors[1])
 	nodeId := hashString(string(n.Address))
 	nodeId.Mod(nodeId, hashMod)
-	nodeToBeJoinedOnID := hashString(string(nodeToBeJoinedOn))
-	nodeToBeJoinedOnID.Mod(nodeToBeJoinedOnID, hashMod)
+
 	successorID := hashString(string(successor))
 	successorID.Mod(successorID, hashMod)
 
-	if between(nodeId, nodeToBeJoinedOnID, successorID, false) {
+	if between(nodeId, requestID, successorID, true) {
 		reply.Address = successor
 		reply.Found = true
 		return nil
 	} else {
 		fmt.Println("[DEBUG node.FindSuccessor()] Calling for next node: ", successor)
-		call(successor, "Node.Find_successor", nodeToBeJoinedOn, &FindSuccReply{})
-		reply.Address = "AAAAA"
+		call(successor, "Node.Find_successor", requestID, &FindSuccReply{})
+		fmt.Println("INSIDE ELSE")
+		fmt.Println(successor)
+		reply.Address = successor
 		reply.Found = false
+
 		//return n.find_successor(id)
 		//return false, Node{Address: n.closest_preceding_node(id)}
 	}
 	return nil
 }
 
-func find(start NodeAddress) NodeAddress {
+func find(requestID *big.Int, start NodeAddress) NodeAddress {
 	found, nextNode := false, start
 	maxSteps := 32
 	i := 0
 
 	for !found && i < maxSteps {
-		nodeId := hashString(string(nextNode))
-		nodeId.Mod(nodeId, hashMod)
+		fmt.Println(i)
+		fmt.Println(nextNode)
+
 		result := FindSuccReply{}
 		fmt.Println("[DEBUG node.find()] Calling for next node: ", nextNode)
-		ok := call(nextNode, "Node.Find_successor", nodeId, &result)
+		ok := call(nextNode, "Node.Find_successor", requestID, &result)
 		if ok != true {
 			fmt.Println("Error in Node.find(): ")
 		}
