@@ -80,14 +80,14 @@ func main() {
 				fmt.Println("Usage: get <key>")
 			}
 			fmt.Println("Gets value for key", args[1])
-			getRPC(NodeAddress(args[2]), Key(args[1]))
+			getRPC(ipAdd, Key(args[1]))
 
 		case "delete":
 			if len(args) < 2 {
 				fmt.Println("Usage: delete <key>")
 			}
 			fmt.Println("Deletes key-value pair", args[1])
-			deleteRPC(NodeAddress(args[2]), Key(args[1]))
+			deleteRPC(ipAdd, Key(args[1]))
 
 		case "clear":
 			clearTerminal()

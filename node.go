@@ -39,12 +39,13 @@ func CreateNode(args *CreateNodeArgs) {
 		//Id:         hashString(string(args.Address)),
 		Address:    args.Address,
 		Bucket:     make(map[Key]string),
-		Successors: make([]NodeAddress, 1),
+		Successors: make([]NodeAddress, 4),
 	}
 	// node.Id.Mod(node.Id, hashMod)
 	node.create()
 	node.Bucket["state"] = "abcd"
 	go node.server()
+	node.stabilize()
 	//testRPC(args)
 	return
 }
@@ -55,7 +56,7 @@ func (n *Node) Get(args *GetArgs, reply *GetReply) error {
 	if !ok {
 		return fmt.Errorf("Key not found")
 	}
-	fmt.Println(n.Bucket)
+	fmt.Println(n.Bucket[key])
 	return nil
 }
 
@@ -89,13 +90,45 @@ func (n *Node) Put(args *PutArgs, reply *PutReply) error {
 	return nil
 }
 
+func (n *Node) Put_all(bucket map[Key]string, reply *PutReply) {
+	for key, value := range bucket {
+		n.Bucket[key] = value
+	}
+}
+
+func (n *Node) Get_all(address NodeAddress) {
+	predecessor := n.Predecessor
+	predecessorId := hashString(string(predecessor))
+	predecessorId.Mod(predecessorId, hashMod)
+	insertId := hashString(string(address))
+	insertId.Mod(insertId, hashMod)
+	nodeId := hashString(string(n.Address))
+	nodeId.Mod(nodeId, hashMod)
+
+	var tmp_map map[Key]string
+
+	if between(predecessorId, insertId, nodeId, true) {
+		for k, v := range n.Bucket {
+			keyId := hashString(string(k))
+			keyId.Mod(keyId, hashMod)
+			if between(predecessorId, keyId, insertId, true) {
+				tmp_map[k] = v
+			}
+		}
+		ok := call(address, "Node.Put_all", tmp_map, struct{}{})
+		if !ok {
+			fmt.Println("Error moving the keys to the joined node")
+			return
+		}
+
+	}
+
+}
+
 // Create chord ring
 func (n *Node) create() {
 	n.Predecessor = ""
 	n.Successors[0] = n.Address
-	fmt.Println(n.Successors)
-	fmt.Println(len(n.Successors))
-	fmt.Println(n.Successors[0])
 	//n.find_successor()
 }
 
@@ -129,10 +162,10 @@ func (n *Node) GetPredecessor(none *struct{}, reply *AddressReply) error {
 	return nil
 }
 
-func (n *Node) Find_successor(requestID *big.Int, NodeAddress, reply *FindSuccReply) error {
+func (n *Node) Find_successor(requestID *big.Int, reply *FindSuccReply) error {
 	successor := n.Successors[0]
-	fmt.Println("FIRST INDEX: ", successor)
-	fmt.Println("SECOND INDEX: ", n.Successors[1])
+	// fmt.Println("FIRST INDEX: ", successor)
+	// fmt.Println("SECOND INDEX: ", n.Successors[1])
 	nodeId := hashString(string(n.Address))
 	nodeId.Mod(nodeId, hashMod)
 
@@ -202,10 +235,45 @@ func (n *Node) server() {
 
 }
 
+func (n *Node) GetSuccessors(none *struct{}, reply *SuccessorsListReply) error {
+	reply.Successors = n.Successors
+	return nil
+}
+
 func (n *Node) stabilize() {
 	successor := n.Successors[0]
+
+	var successorsReply SuccessorsListReply
+	ok := call(successor, "Node.GetSuccessors", &struct{}{}, &successorsReply)
+	successors := successorsReply.Successors
+	if ok {
+		for i := 0; i < len(successor)-1; i++ {
+			fmt.Println(i)
+			fmt.Println(len(n.Successors))
+			fmt.Println(len(successors))
+			n.Successors[i+1] = successors[i]
+
+		}
+	} else {
+		fmt.Println("GetSuccessors failed")
+		if successor == "" {
+			fmt.Println("Successor is empty, setting successor address to itself")
+			n.Successors[0] = n.Address
+		} else {
+			for i := 0; i < len(n.Successors); i++ {
+				if i == len(n.Successors)-1 {
+					n.Successors[i] = ""
+				} else {
+					n.Successors[i] = n.Successors[i+1]
+				}
+			}
+		}
+	}
+
+	fmt.Println("AAAA")
+
 	var reply AddressReply
-	call(successor, "Node.GetPredecessor", struct{}{}, &reply)
+	call(successor, "Node.GetPredecessor", &struct{}{}, &reply)
 	predecessor := reply.Address
 	nodeId := hashString(string(n.Address))
 	nodeId.Mod(nodeId, hashMod)
@@ -213,16 +281,13 @@ func (n *Node) stabilize() {
 	predecessorID.Mod(predecessorID, hashMod)
 	successorID := hashString(string(successor))
 	successorID.Mod(successorID, hashMod)
-
 	if between(nodeId, predecessorID, successorID, false) {
 		n.Successors[0] = predecessor
 	}
-	call(successor, "node.Notify", n.Address, struct{}{})
+	call(successor, "node.Notify", n.Address, &struct{}{})
 	//fmt.Print(successor)
-
 }
-
-func (n *Node) Notify(address NodeAddress) {
+func (n *Node) Notify(address NodeAddress, none *struct{}) error {
 	predecessorID := hashString(string(n.Predecessor))
 	predecessorID.Mod(predecessorID, hashMod)
 
@@ -235,6 +300,7 @@ func (n *Node) Notify(address NodeAddress) {
 	if n.Predecessor == "" || between(predecessorID, addressID, nodeId, false) {
 		n.Predecessor = address
 	}
+	return nil
 }
 
 func (n *Node) Ping(args *HostArgs, reply *string) error {
@@ -246,12 +312,12 @@ func (n *Node) Ping(args *HostArgs, reply *string) error {
 func (n *Node) check() {
 	go func() {
 		for {
+			time.Sleep(time.Millisecond * 300)
 			n.stabilize()
-			time.Sleep(time.Second * (1 / 3))
+			time.Sleep(time.Millisecond * 300)
 			n.fixFingers()
-			time.Sleep(time.Second * (1 / 3))
+			time.Sleep(time.Millisecond * 300)
 			n.checkPredecessor()
-			time.Sleep(time.Second * (1 / 3))
 		}
 	}()
 }

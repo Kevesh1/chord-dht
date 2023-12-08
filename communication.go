@@ -29,7 +29,7 @@ func getRPC(address NodeAddress, key Key) {
 	}
 	ok := call(addr, "Node.Get", &GetArgs{Key: key}, &GetReply{})
 	if !ok {
-		fmt.Println("[DEBUG node.Put()] Error in call(): ", err)
+		fmt.Println("[DEBUG node.Get()] Error in call(): ", err)
 	} else {
 		// File logic for cypher
 	}
