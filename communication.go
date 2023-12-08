@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	"log"
 	"net/rpc"
 )
 
@@ -84,7 +83,8 @@ func getPredecessorRPC(address NodeAddress) {
 func call(address NodeAddress, method string, args interface{}, reply interface{}) bool {
 	c, err := rpc.DialHTTP("tcp", string(address))
 	if err != nil {
-		log.Fatal("dialing:", err)
+		fmt.Println("Error dialing: ", err)
+		return false
 	}
 	defer c.Close()
 
