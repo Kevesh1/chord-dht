@@ -72,7 +72,7 @@ func dumpRPC(address NodeAddress) {
 }
 
 func joinRPC(address, joinAddress NodeAddress) {
-	call(address, "Node.Join", joinAddress, &JoinReply{})
+	call(joinAddress, "Node.Join", address, &JoinReply{})
 }
 
 func getPredecessorRPC(address NodeAddress) {

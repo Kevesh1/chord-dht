@@ -42,7 +42,11 @@ func main() {
 			}
 			adress := NodeAddress("127.0.0.1:" + args[1])
 			ipAdd = adress
-			createNode(&CreateNodeArgs{Address: adress})
+			ringBool := false
+			if args[2] == "join" {
+				ringBool = true
+			}
+			createNode(&CreateNodeArgs{Address: adress, Ring: ringBool})
 			var reply string
 			//time.Sleep(time.Second * 1)
 			//call(adress, "Node.Ping", &HostArgs{}, &reply)

@@ -12,6 +12,7 @@ type CreateReply struct {
 
 type CreateNodeArgs struct {
 	Address NodeAddress
+	Ring    bool
 }
 
 type CreateNodeReply struct {

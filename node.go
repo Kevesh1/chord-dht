@@ -42,9 +42,14 @@ func CreateNode(args *CreateNodeArgs) {
 		Successors: make([]NodeAddress, 4),
 	}
 	// node.Id.Mod(node.Id, hashMod)
-	node.create()
+	createRing := args.Ring
+	if createRing {
+		node.create()
+		fmt.Println("INSIDE")
+	}
 	node.Bucket["state"] = "abcd"
 	go node.server()
+	node.check()
 	//node.stabilize()
 	//testRPC(args)
 	return
@@ -186,8 +191,9 @@ func (n *Node) Find_successor(requestID *big.Int, reply *FindSuccReply) error {
 		return nil
 	} else {
 
+		nextSuccessor := n.closest_preceding_node(requestID)
 		fmt.Println("[DEBUG node.FindSuccessor()] Calling for next node: ", successor)
-		call(successor, "Node.Find_successor", requestID, &FindSuccReply{})
+		call(nextSuccessor, "Node.Find_successor", requestID, &FindSuccReply{})
 		reply.Address = successor
 		reply.Found = false
 
@@ -222,11 +228,13 @@ func find(requestID *big.Int, start NodeAddress) NodeAddress {
 	return "-1"
 }
 
-func (n *Node) closest_preceding_node(id Key) NodeAddress {
-	//TODO:
-	//FINGERTABLE LOGIC
-	var hash NodeAddress = ""
-	return hash
+func (n *Node) closest_preceding_node(requestID *big.Int) NodeAddress {
+	// skip this loop if you do not have finger tables implemented yet
+	//for i = m downto 1
+	// if (finger[i] ∈ (n,id])
+	// 	return finger[i];
+	return n.Successors[0]
+
 }
 
 func (n *Node) server() {
@@ -234,12 +242,10 @@ func (n *Node) server() {
 	rpc.HandleHTTP()
 	l, e := net.Listen("tcp", string(n.Address))
 	fmt.Println("Local node listening on ", n.Address)
-
 	if e != nil {
 		log.Fatal("listen error:", e)
 	}
 	http.Serve(l, nil)
-	n.stabilize()
 }
 
 func (n *Node) GetSuccessors(none *struct{}, reply *SuccessorsListReply) error {
@@ -248,15 +254,18 @@ func (n *Node) GetSuccessors(none *struct{}, reply *SuccessorsListReply) error {
 }
 
 func (n *Node) stabilize() {
+	//i := 0
+	//fmt.Println(i)
+	//i++
 	successor := n.Successors[0]
 	var successorsReply SuccessorsListReply
 	ok := call(successor, "Node.GetSuccessors", &struct{}{}, &successorsReply)
 	successors := successorsReply.Successors
 	if ok {
-		for i := 0; i < len(successor)-1; i++ {
-			fmt.Println(i)
-			fmt.Println(len(n.Successors))
-			fmt.Println(len(successors))
+		for i := 0; i < 4-2; i++ {
+			//fmt.Println(i)
+			// fmt.Println(len(n.Successors))
+			// fmt.Println(len(successors))
 			n.Successors[i+1] = successors[i]
 
 		}
@@ -267,8 +276,8 @@ func (n *Node) stabilize() {
 			n.Successors[0] = n.Address
 		} else {
 			fmt.Println("Successor is not empty, removing successor AIUFEBIUEIFU")
-			for i := 0; i < len(n.Successors); i++ {
-				if i == len(n.Successors)-1 {
+			for i := 0; i < 4-1; i++ {
+				if i == 4-1 {
 					n.Successors[i] = ""
 				} else {
 					n.Successors[i] = n.Successors[i+1]
@@ -277,7 +286,7 @@ func (n *Node) stabilize() {
 		}
 	}
 
-	fmt.Println("AAAA")
+	//fmt.Println("AAAA")
 
 	var reply AddressReply
 	call(successor, "Node.GetPredecessor", &struct{}{}, &reply)
