@@ -24,8 +24,8 @@ var fingerTableSize = 6 // Each finger table i contains the id of (n + 2^i) mod 
 var hashMod *big.Int = new(big.Int).Exp(big.NewInt(2), big.NewInt(int64(MODULO)), nil)
 
 type Node struct {
-	//Id *big.Int
-
+	Name        string
+	Id          *big.Int
 	Address     NodeAddress
 	FingerTable []NodeAddress
 	Predecessor NodeAddress
@@ -34,7 +34,7 @@ type Node struct {
 	Bucket map[Key]string
 }
 
-func CreateNode(args *CreateNodeArgs) {
+func CreateNode(args *CreateNodeArgs) Node {
 	node := Node{
 		//Id:         hashString(string(args.Address)),
 		Address:    args.Address,
@@ -47,7 +47,7 @@ func CreateNode(args *CreateNodeArgs) {
 	go node.server()
 	//node.stabilize()
 	//testRPC(args)
-	return
+	return node
 }
 
 func (n *Node) Get(args *GetArgs, reply *GetReply) error {
@@ -140,6 +140,9 @@ func (n *Node) checkPredecessor() {
 
 }
 
+// @params:
+//   - n is the node that calls on the newone to join the chord
+//   - newNode is the node that wants to join the chord
 func (n *Node) Join(newNode NodeAddress, r *JoinReply) error {
 
 	n.Predecessor = ""

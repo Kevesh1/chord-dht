@@ -71,8 +71,9 @@ func dumpRPC(address NodeAddress) {
 	call(address, "Node.Dump", &GetArgs{}, &GetReply{})
 }
 
-func joinRPC(address, joinAddress NodeAddress) {
-	call(address, "Node.Join", joinAddress, &JoinReply{})
+func joinRPC(address NodeAddress, newAdress NodeAddress) error {
+	call(address, "Node.Join", newAdress, &JoinReply{})
+	return nil
 }
 
 func getPredecessorRPC(address NodeAddress) {
