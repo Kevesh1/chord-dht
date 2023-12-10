@@ -148,7 +148,15 @@ func (n *Node) fixFingers() {
 }
 
 func (n *Node) checkPredecessor() {
-
+	var reply string
+	if n.Predecessor != n.Address {
+		ok := call(n.Predecessor, "Node.Ping", &HostArgs{}, &reply)
+		if !ok {
+			fmt.Println("[DEBUG: node.checkPredecessor()] Predecessor is dead")
+			n.Predecessor = ""
+		} else {
+		}
+	}
 }
 
 func (n *Node) Join(newNode NodeAddress, r *JoinReply) error {
