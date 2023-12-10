@@ -95,38 +95,44 @@ func (n *Node) Put(args *PutArgs, reply *PutReply) error {
 	return nil
 }
 
-func (n *Node) Put_all(bucket map[Key]string, reply *PutReply) {
+func (n *Node) Put_all(bucket map[Key]string, reply *PutReply) error {
+	fmt.Println("PUT ALL")
 	for key, value := range bucket {
 		n.Bucket[key] = value
 	}
+	return nil
 }
 
-func (n *Node) Get_all(address NodeAddress) {
-	predecessor := n.Predecessor
-	predecessorId := hashString(string(predecessor))
-	predecessorId.Mod(predecessorId, hashMod)
+func (n *Node) Get_all(address NodeAddress, none *struct{}) error {
+	fmt.Println("GET ALL")
+	fmt.Println(address)
+	//predecessor := n.Predecessor
+	//successorId := hashString(string(n.Successors[0]))
+	//successorId.Mod(successorId, hashMod)
 	insertId := hashString(string(address))
 	insertId.Mod(insertId, hashMod)
 	nodeId := hashString(string(n.Address))
 	nodeId.Mod(nodeId, hashMod)
 
-	var tmp_map map[Key]string
+	tmp_map := make(map[Key]string)
 
-	if between(predecessorId, insertId, nodeId, true) {
-		for k, v := range n.Bucket {
-			keyId := hashString(string(k))
-			keyId.Mod(keyId, hashMod)
-			if between(predecessorId, keyId, insertId, true) {
-				tmp_map[k] = v
-			}
+	//if between(predecessorId, insertId, nodeId, true) {
+	for k, v := range n.Bucket {
+		keyId := hashString(string(k))
+		keyId.Mod(keyId, hashMod)
+		if !between(insertId, keyId, nodeId, true) {
+			tmp_map[k] = v
+			delete(n.Bucket, k)
 		}
-		ok := call(address, "Node.Put_all", tmp_map, struct{}{})
-		if !ok {
-			fmt.Println("Error moving the keys to the joined node")
-			return
-		}
-
 	}
+	//n.Put_all(tmp_map)
+	ok := call(address, "Node.Put_all", tmp_map, &struct{}{})
+	if !ok {
+		fmt.Println("Error moving the keys to the joined node")
+	}
+	return nil
+
+	//}
 
 }
 
@@ -159,6 +165,8 @@ func (n *Node) Join(newNode NodeAddress, r *JoinReply) error {
 		fmt.Println("ERROR")
 	}
 	n.Successors[0] = reply.Address
+	ok = call(n.Successors[0], "Node.Get_all", n.Address, &struct{}{})
+	//n.Get_all(n.Successors[0])
 
 	// if between(nodeId, newNodeId, hashString(string(n.Successors[0])), false) || n.Successors[0] == n.Address {
 	// 	n.Successors[0] = newNode
