@@ -260,7 +260,6 @@ func (n *Node) Put_all(bucket map[Key]string, reply *PutReply) {
 		err = os.WriteFile("./tmp/"+string(n.Address)+"/"+string(key), encryptedBytes, 0777)
 		n.Bucket[key] = "true"
 	}
-	return nil
 }
 
 func (n *Node) Get_all(address NodeAddress, none *struct{}) error {
@@ -305,7 +304,7 @@ func (n *Node) create() {
 
 func (n *Node) fixFingers() {
 	n.Next = n.Next + 1
-	if n.Next > 160 {
+	if n.Next >= 160 {
 		n.Next = 1
 	}
 	// nodeId := hashString(string(n.Address))
@@ -490,10 +489,8 @@ func (n *Node) stabilize() {
 	} else {
 		fmt.Println("GetSuccessors failed")
 		if successor == "" {
-			fmt.Println("Successor is empty, setting successor address to itself")
 			n.Successors[0] = n.Address
 		} else {
-			fmt.Println("Successor is not empty, removing successor")
 			for i := 0; i < n.numberSuccessors-1; i++ {
 				if i == n.numberSuccessors-1 {
 					n.Successors[i] = ""
@@ -546,7 +543,7 @@ func (n *Node) check() {
 			time.Sleep(time.Millisecond * time.Duration(n.timeStabilize))
 			n.stabilize()
 			time.Sleep(time.Millisecond * time.Duration(n.timeFixFingers))
-			n.fixFingers()
+			//	n.fixFingers()
 			time.Sleep(time.Millisecond * time.Duration(n.timeCheckPredecessor))
 			n.checkPredecessor()
 		}

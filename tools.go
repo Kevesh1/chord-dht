@@ -3,7 +3,6 @@ package main
 import (
 	"crypto/sha1"
 	"errors"
-	"fmt"
 	"math/big"
 	"os"
 )
@@ -27,7 +26,6 @@ func recordHash(
 	file.WriteString("HRequestID: " + HrequestId.String() + "\n")
 	//Write sucessorID before and after hashed
 	file.WriteString("HSucessorID: " + HsucessorId.String() + "\n")
-	fmt.Println("Hashes recorded in hash_records.txt")
 	return nil
 }
 
