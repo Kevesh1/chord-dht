@@ -22,9 +22,9 @@ func testRPC(args *CreateNodeArgs) {
 func getRPC(address NodeAddress, key Key) {
 	addr, err := ClientLookup(key, address)
 	if err != nil {
-		fmt.Println("[DEBUG node.Put()] Error in ClientLookup(): ", err)
+		fmt.Println("[DEBUG node.Get()] Error in ClientLookup(): ", err)
 	} else {
-		fmt.Println("[DEBUG node.Put()] Found address: ", addr)
+		fmt.Println("[DEBUG node.Get()] Found address: ", addr)
 	}
 	ok := call(addr, "Node.Get", &GetArgs{Key: key}, &GetReply{})
 	if !ok {
