@@ -31,15 +31,19 @@ type Node struct {
 	Predecessor NodeAddress
 	Successors  []NodeAddress
 
+	Next int
+
 	Bucket map[Key]string
 }
 
 func CreateNode(args *CreateNodeArgs) {
 	node := Node{
 		//Id:         hashString(string(args.Address)),
-		Address:    args.Address,
-		Bucket:     make(map[Key]string),
-		Successors: make([]NodeAddress, 4),
+		Address:     args.Address,
+		Bucket:      make(map[Key]string),
+		Successors:  make([]NodeAddress, 4),
+		FingerTable: make([]NodeAddress, 160),
+		Next:        0,
 	}
 	// node.Id.Mod(node.Id, hashMod)
 	createRing := args.Ring
@@ -144,6 +148,46 @@ func (n *Node) create() {
 }
 
 func (n *Node) fixFingers() {
+	n.Next = n.Next + 1
+	if n.Next > 160 {
+		n.Next = 1
+	}
+	// nodeId := hashString(string(n.Address))
+	// nodeId.Mod(nodeId, hashMod)
+
+	requestId := jump(string(n.Address), n.Next)
+
+	nodeId := hashString(string(n.Address))
+	nodeId.Mod(nodeId, hashMod)
+
+	var reply FindSuccReply
+	ok := call(n.Address, "Node.Find_successor", requestId, &reply)
+	if !ok {
+		fmt.Println("Error when finding successors in fixFingers")
+		return
+	}
+	if !reply.Found {
+		fmt.Println("Could not find successor")
+		return
+	}
+	succesorId := hashString(string(reply.Address))
+	succesorId.Mod(succesorId, hashMod)
+	n.FingerTable[n.Next] = reply.Address
+
+	for {
+		n.Next = n.Next + 1
+		if n.Next > 160 {
+			n.Next = 1
+		}
+
+		requestId = jump(string(n.Address), n.Next)
+		if between(nodeId, requestId, succesorId, false) {
+			n.FingerTable[n.Next] = reply.Address
+		} else {
+			n.Next--
+			return
+		}
+	}
 
 }
 
@@ -247,10 +291,18 @@ func find(requestID *big.Int, start NodeAddress) NodeAddress {
 func (n *Node) closest_preceding_node(requestID *big.Int) NodeAddress {
 	// skip this loop if you do not have finger tables implemented yet
 	//for i = m downto 1
+	nodeId := hashString(string(n.Address))
+	nodeId.Mod(nodeId, hashMod)
+	for i := fingerTableSize; i >= 1; i-- {
+		fingerId := hashString(string(n.FingerTable[i]))
+		fingerId.Mod(fingerId, hashMod)
+		if between(nodeId, fingerId, requestID, false) {
+			return n.FingerTable[i]
+		}
+	}
 	// if (finger[i] ∈ (n,id])
 	// 	return finger[i];
 	return n.Successors[0]
-
 }
 
 func (n *Node) server() {
