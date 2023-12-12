@@ -80,6 +80,10 @@ func getPredecessorRPC(address NodeAddress) {
 
 }
 
+func quitRPC(address NodeAddress) {
+	call(address, "Node.Quit", struct{}{}, struct{}{})
+}
+
 func call(address NodeAddress, method string, args interface{}, reply interface{}) bool {
 	c, err := rpc.DialHTTP("tcp", string(address))
 	if err != nil {

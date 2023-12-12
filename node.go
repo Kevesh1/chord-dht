@@ -113,7 +113,7 @@ func CreateNode(args *CreateNodeArgs) {
 		timeCheckPredecessor: args.timeCheckPredecessor,
 	}
 	createFolders(&node)
-	node.generateRSAKey(2048)
+	//node.generateRSAKey(2048)
 	// node.Id.Mod(node.Id, hashMod)
 	createRing := args.Ring
 	if createRing {
@@ -160,6 +160,21 @@ func copy(src, dst string) (int64, error) {
 	defer destination.Close()
 	nBytes, err := io.Copy(destination, source)
 	return nBytes, err
+}
+
+func (n *Node) Quit(n1 *struct{}, n2 *struct{}) error {
+	successor := n.Successors[0]
+	tmp_map := make(map[Key]string)
+
+	for k, v := range n.Bucket {
+		tmp_map[k] = v
+	}
+	ok := call(successor, "Node.Put_all", tmp_map, &struct{}{})
+	if !ok {
+		fmt.Println("Error moving the keys to the joined node")
+	}
+	os.Exit(0)
+	return nil
 }
 
 func (n *Node) Get(args *GetArgs, reply *GetReply) error {
