@@ -2,12 +2,9 @@ package main
 
 import (
 	"bufio"
-	"crypto"
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/sha256"
-	"crypto/x509"
-	"encoding/pem"
 	"fmt"
 	"io"
 	"log"
@@ -51,51 +48,6 @@ type Node struct {
 
 	privateKey *rsa.PrivateKey
 	publicKey  *rsa.PublicKey
-}
-
-func (node *Node) generateRSAKey(bits int) {
-	privateKey, err := rsa.GenerateKey(rand.Reader, bits)
-	if err != nil {
-		panic(err)
-	}
-	node.privateKey = privateKey
-	node.publicKey = &privateKey.PublicKey
-
-	// Store private key in Node folder
-	priDerText := x509.MarshalPKCS1PrivateKey(privateKey)
-	block := pem.Block{
-		Type: string(node.Address) + "-private Key",
-
-		Headers: nil,
-
-		Bytes: priDerText,
-	}
-	node_files_folder := "./tmp/" + node.Address
-	privateHandler, err := os.Create(string(node_files_folder) + "/private.pem")
-	if err != nil {
-		panic(err)
-	}
-	defer privateHandler.Close()
-	pem.Encode(privateHandler, &block)
-
-	// Store public key in Node folder
-	pubDerText, err := x509.MarshalPKIXPublicKey(node.publicKey)
-	if err != nil {
-		panic(err)
-	}
-	block = pem.Block{
-		Type: string(node.Address) + "-public Key",
-
-		Headers: nil,
-
-		Bytes: pubDerText,
-	}
-	publicHandler, err := os.Create(string(node_files_folder) + "/public.pem")
-	if err != nil {
-		panic(err)
-	}
-	defer publicHandler.Close()
-	pem.Encode(publicHandler, &block)
 }
 
 func CreateNode(args *CreateNodeArgs) {
@@ -181,7 +133,7 @@ func (n *Node) Get(args *GetArgs, reply *GetReply) error {
 	key := args.Key
 	if n.Bucket[key] == "true" {
 		encryptedBytes := ReadFileBytes("./tmp/" + string(n.Address) + "/" + string(key))
-		decryptedBytes, err := n.privateKey.Decrypt(nil, encryptedBytes, &rsa.OAEPOptions{Hash: crypto.SHA256})
+		decryptedBytes, err := n.decrypt(encryptedBytes)
 		if err != nil {
 			panic(err)
 		}
@@ -220,12 +172,7 @@ func (n *Node) Delete(args *DeleteArgs, reply *DeleteReply) error {
 
 func (n *Node) Put(args *PutArgs, reply *PutReply) error {
 	//copy("./samples/"+string(args.FileKey), "./tmp/"+string(n.Address)+"/"+string(args.FileKey))
-	encryptedBytes, err := rsa.EncryptOAEP(
-		sha256.New(),
-		rand.Reader,
-		n.publicKey,
-		ReadFileBytes("./samples/"+string(args.FileKey)),
-		nil)
+	encryptedBytes, err := n.encrypt("./samples/" + string(args.FileKey))
 	if err != nil {
 		panic(err)
 	}
@@ -278,11 +225,7 @@ func (n *Node) Put_all(bucket map[Key]string, reply *PutReply) {
 }
 
 func (n *Node) Get_all(address NodeAddress, none *struct{}) error {
-	fmt.Println("GET ALL")
-	fmt.Println(address)
-	//predecessor := n.Predecessor
-	//successorId := hashString(string(n.Successors[0]))
-	//successorId.Mod(successorId, hashMod)
+	fmt.Println("[DEBUG: node.Get_all()] Called (", address, ")")
 	insertId := hashString(string(address))
 	insertId.Mod(insertId, hashMod)
 	nodeId := hashString(string(n.Address))
@@ -290,24 +233,59 @@ func (n *Node) Get_all(address NodeAddress, none *struct{}) error {
 
 	tmp_map := make(map[Key]string)
 
-	//if between(predecessorId, insertId, nodeId, true) {
-	for k, v := range n.Bucket {
-		keyId := hashString(string(k))
-		keyId.Mod(keyId, hashMod)
-		if !between(insertId, keyId, nodeId, true) {
-			tmp_map[k] = v
-			delete(n.Bucket, k)
+	src, err := os.ReadDir("./tmp/" + string(address))
+	if err != nil {
+		fmt.Println(" [DEBUG: node.Get_all()] Error reading source directory")
+	}
+
+	target_src, err := os.ReadDir("./tmp/" + string(n.Address))
+	if err != nil {
+		fmt.Println(" [DEBUG: node.Get_all()] Error reading target directory")
+	}
+
+	for _, file := range target_src {
+		if file.IsDir() {
+
+			encryptedBytes := ReadFileBytes("./tmp/" + string(address) + "/" + file.Name())
+			decryptedBytes, err := n.decrypt(encryptedBytes)
+			if err != nil {
+				fmt.Println(" [DEBUG: node.Get_all()] Error decrypting file", file.Name())
+				panic(err)
+			}
+
+			// Concatenate directory path with file name
+			targetFilePath := "./tmp/" + string(n.Address) + "/" + file.Name()
+
+			os.WriteFile(targetFilePath, decryptedBytes, 0777)
+			os.Remove("./tmp/" + string(address) + "/" + file.Name())
 		}
 	}
-	//n.Put_all(tmp_map)
-	ok := call(address, "Node.Put_all", tmp_map, &struct{}{})
-	if !ok {
-		fmt.Println("Error moving the keys to the joined node")
+
+	for _, file := range src {
+		if file.IsDir() {
+			continue
+		}
+		if _, ok := n.Bucket[Key(file.Name())]; ok {
+			continue
+		}
+		tmp_map[Key(file.Name())] = "true"
+
+		for k, v := range n.Bucket {
+			keyId := hashString(string(k))
+			keyId.Mod(keyId, hashMod)
+			if !between(insertId, keyId, nodeId, true) {
+				tmp_map[k] = v
+				delete(n.Bucket, k)
+			}
+		}
+		ok := call(address, "Node.Put_all", tmp_map, &struct{}{})
+		if !ok {
+			fmt.Println("Error moving the keys to the joined node")
+		}
+		return nil
+
 	}
 	return nil
-
-	//}
-
 }
 
 // Create chord ring
