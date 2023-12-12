@@ -11,8 +11,12 @@ type CreateReply struct {
 }
 
 type CreateNodeArgs struct {
-	Address NodeAddress
-	Ring    bool
+	Address              NodeAddress
+	Ring                 bool
+	timeFixFingers       int
+	timeStabilize        int
+	timeCheckPredecessor int
+	numberSuccessors     int
 }
 
 type CreateNodeReply struct {
@@ -40,8 +44,7 @@ type JoinReply struct {
 }
 
 type PutArgs struct {
-	Key   Key
-	Value string
+	FileKey Key
 }
 
 type PutReply struct {

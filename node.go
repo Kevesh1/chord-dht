@@ -1,12 +1,21 @@
 package main
 
 import (
+	"bufio"
+	"crypto"
+	"crypto/rand"
+	"crypto/rsa"
+	"crypto/sha256"
+	"crypto/x509"
+	"encoding/pem"
 	"fmt"
+	"io"
 	"log"
 	"math/big"
 	"net"
 	"net/http"
 	"net/rpc"
+	"os"
 	"time"
 )
 
@@ -26,30 +35,89 @@ var hashMod *big.Int = new(big.Int).Exp(big.NewInt(2), big.NewInt(int64(MODULO))
 type Node struct {
 	//Id *big.Int
 
-	Address     NodeAddress
-	FingerTable []NodeAddress
-	Predecessor NodeAddress
-	Successors  []NodeAddress
+	timeFixFingers       int
+	timeStabilize        int
+	timeCheckPredecessor int
+
+	Address          NodeAddress
+	FingerTable      []NodeAddress
+	Predecessor      NodeAddress
+	Successors       []NodeAddress
+	numberSuccessors int
 
 	Next int
 
 	Bucket map[Key]string
+
+	privateKey *rsa.PrivateKey
+	publicKey  *rsa.PublicKey
+}
+
+func (node *Node) generateRSAKey(bits int) {
+	privateKey, err := rsa.GenerateKey(rand.Reader, bits)
+	if err != nil {
+		panic(err)
+	}
+	node.privateKey = privateKey
+	node.publicKey = &privateKey.PublicKey
+
+	// Store private key in Node folder
+	priDerText := x509.MarshalPKCS1PrivateKey(privateKey)
+	block := pem.Block{
+		Type: string(node.Address) + "-private Key",
+
+		Headers: nil,
+
+		Bytes: priDerText,
+	}
+	node_files_folder := "./tmp/" + node.Address
+	privateHandler, err := os.Create(string(node_files_folder) + "/private.pem")
+	if err != nil {
+		panic(err)
+	}
+	defer privateHandler.Close()
+	pem.Encode(privateHandler, &block)
+
+	// Store public key in Node folder
+	pubDerText, err := x509.MarshalPKIXPublicKey(node.publicKey)
+	if err != nil {
+		panic(err)
+	}
+	block = pem.Block{
+		Type: string(node.Address) + "-public Key",
+
+		Headers: nil,
+
+		Bytes: pubDerText,
+	}
+	publicHandler, err := os.Create(string(node_files_folder) + "/public.pem")
+	if err != nil {
+		panic(err)
+	}
+	defer publicHandler.Close()
+	pem.Encode(publicHandler, &block)
 }
 
 func CreateNode(args *CreateNodeArgs) {
 	node := Node{
 		//Id:         hashString(string(args.Address)),
-		Address:     args.Address,
-		Bucket:      make(map[Key]string),
-		Successors:  make([]NodeAddress, 4),
-		FingerTable: make([]NodeAddress, 160),
-		Next:        0,
+		Address:          args.Address,
+		Bucket:           make(map[Key]string),
+		Successors:       make([]NodeAddress, 4),
+		numberSuccessors: args.numberSuccessors,
+		FingerTable:      make([]NodeAddress, 160),
+		Next:             0,
+
+		timeFixFingers:       args.timeFixFingers,
+		timeStabilize:        args.timeStabilize,
+		timeCheckPredecessor: args.timeCheckPredecessor,
 	}
+	createFolders(&node)
+	node.generateRSAKey(2048)
 	// node.Id.Mod(node.Id, hashMod)
 	createRing := args.Ring
 	if createRing {
 		node.create()
-		fmt.Println("INSIDE")
 	}
 	node.Bucket["state"] = "abcd"
 	go node.server()
@@ -59,13 +127,54 @@ func CreateNode(args *CreateNodeArgs) {
 	return
 }
 
+// Helper function to node.CreateNode() for setting up tmp folders for file storage
+func createFolders(node *Node) {
+	route := "tmp/" + string(node.Address)
+	err := os.MkdirAll(route, 0777)
+	if err != nil {
+		fmt.Println("Error creating tmp folder")
+	}
+}
+
+// Helper function that copies a file from src to dst
+func copy(src, dst string) (int64, error) {
+	sourceFileStat, err := os.Stat(src)
+	if err != nil {
+		return 0, err
+	}
+
+	if !sourceFileStat.Mode().IsRegular() {
+		return 0, fmt.Errorf("%s is not a regular file", src)
+	}
+
+	source, err := os.Open(src)
+	if err != nil {
+		return 0, err
+	}
+	defer source.Close()
+
+	destination, err := os.Create(dst)
+	if err != nil {
+		return 0, err
+	}
+	defer destination.Close()
+	nBytes, err := io.Copy(destination, source)
+	return nBytes, err
+}
+
 func (n *Node) Get(args *GetArgs, reply *GetReply) error {
 	key := args.Key
-	_, ok := n.Bucket[key]
-	if !ok {
+	if n.Bucket[key] == "true" {
+		encryptedBytes := ReadFileBytes("./tmp/" + string(n.Address) + "/" + string(key))
+		decryptedBytes, err := n.privateKey.Decrypt(nil, encryptedBytes, &rsa.OAEPOptions{Hash: crypto.SHA256})
+		if err != nil {
+			panic(err)
+		}
+		fmt.Println("DECRPTED: ")
+		fmt.Println(string(decryptedBytes))
+	} else {
 		return fmt.Errorf("Key not found")
 	}
-	fmt.Println(n.Bucket[key])
 	return nil
 }
 
@@ -75,7 +184,12 @@ func (n *Node) Dump(args *GetArgs, reply *GetReply) error {
 	fmt.Println("FingerTable:", n.FingerTable)
 	fmt.Println("Predecessor:", n.Predecessor)
 	fmt.Println("Successors:", n.Successors)
+	fmt.Println("numberSuccessors:", n.numberSuccessors)
 	fmt.Println("Bucket:", n.Bucket)
+	fmt.Println("timeFixFingers:", n.timeFixFingers, "ms")
+	fmt.Println("timeStabilize:", n.timeStabilize, "ms")
+	fmt.Println("timeCheckPredecessor:", n.timeCheckPredecessor, "ms")
+
 	return nil
 }
 
@@ -90,21 +204,62 @@ func (n *Node) Delete(args *DeleteArgs, reply *DeleteReply) error {
 }
 
 func (n *Node) Put(args *PutArgs, reply *PutReply) error {
-	key := args.Key
-	// _, ok := n.Bucket[key]
-	// if !ok {
-	// 	return fmt.Errorf("Key not found")
-	// }
-	n.Bucket[key] = args.Value
+	//copy("./samples/"+string(args.FileKey), "./tmp/"+string(n.Address)+"/"+string(args.FileKey))
+	encryptedBytes, err := rsa.EncryptOAEP(
+		sha256.New(),
+		rand.Reader,
+		n.publicKey,
+		ReadFileBytes("./samples/"+string(args.FileKey)),
+		nil)
+	if err != nil {
+		panic(err)
+	}
+	err = os.WriteFile("./tmp/"+string(n.Address)+"/"+string(args.FileKey), encryptedBytes, 0777)
+	n.Bucket[args.FileKey] = "true"
 	return nil
 }
 
-func (n *Node) Put_all(bucket map[Key]string, reply *PutReply) error {
-	fmt.Println("PUT ALL")
+// Helper function to Put() for reading a file into a byte slice
+func ReadFileBytes(fileroute string) []byte {
+	file, err := os.Open(fileroute)
+	if err != nil {
+		fmt.Println(err)
+		return nil
+	}
+	defer file.Close()
+
+	// Get the file size
+	stat, err := file.Stat()
+	if err != nil {
+		fmt.Println(err)
+		return nil
+	}
+
+	// Read the file into a byte slice
+	bs := make([]byte, stat.Size())
+	_, err = bufio.NewReader(file).Read(bs)
+	if err != nil && err != io.EOF {
+		fmt.Println(err)
+		return nil
+	}
+	return bs
+}
+
+func (n *Node) Put_all(bucket map[Key]string, reply *PutReply) {
 	for key, value := range bucket {
 		n.Bucket[key] = value
+		encryptedBytes, err := rsa.EncryptOAEP(
+			sha256.New(),
+			rand.Reader,
+			n.publicKey,
+			ReadFileBytes("./samples/"+string(key)),
+			nil)
+		if err != nil {
+			panic(err)
+		}
+		err = os.WriteFile("./tmp/"+string(n.Address)+"/"+string(key), encryptedBytes, 0777)
+		n.Bucket[key] = "true"
 	}
-	return nil
 }
 
 func (n *Node) Get_all(address NodeAddress, none *struct{}) error {
@@ -323,30 +478,22 @@ func (n *Node) GetSuccessors(none *struct{}, reply *SuccessorsListReply) error {
 }
 
 func (n *Node) stabilize() {
-	//i := 0
-	//fmt.Println(i)
-	//i++
 	successor := n.Successors[0]
 	var successorsReply SuccessorsListReply
 	ok := call(successor, "Node.GetSuccessors", &struct{}{}, &successorsReply)
 	successors := successorsReply.Successors
 	if ok {
-		for i := 0; i < 4-2; i++ {
-			//fmt.Println(i)
-			// fmt.Println(len(n.Successors))
-			// fmt.Println(len(successors))
+		for i := 0; i < n.numberSuccessors-2; i++ {
 			n.Successors[i+1] = successors[i]
 
 		}
 	} else {
 		fmt.Println("GetSuccessors failed")
 		if successor == "" {
-			fmt.Println("Successor is empty, setting successor address to itself")
 			n.Successors[0] = n.Address
 		} else {
-			fmt.Println("Successor is not empty, removing successor AIUFEBIUEIFU")
-			for i := 0; i < 4-1; i++ {
-				if i == 4-1 {
+			for i := 0; i < n.numberSuccessors-1; i++ {
+				if i == n.numberSuccessors-1 {
 					n.Successors[i] = ""
 				} else {
 					n.Successors[i] = n.Successors[i+1]
@@ -354,8 +501,6 @@ func (n *Node) stabilize() {
 			}
 		}
 	}
-
-	//fmt.Println("AAAA")
 
 	var reply AddressReply
 	call(successor, "Node.GetPredecessor", &struct{}{}, &reply)
@@ -389,7 +534,6 @@ func (n *Node) Notify(address NodeAddress, none *struct{}) error {
 	return nil
 }
 func (n *Node) Ping(args *HostArgs, reply *string) error {
-	//fmt.Println("INSIDE")
 	*reply = "Ping received"
 	return nil
 }
@@ -397,11 +541,11 @@ func (n *Node) Ping(args *HostArgs, reply *string) error {
 func (n *Node) check() {
 	go func() {
 		for {
-			time.Sleep(time.Millisecond * 300)
+			time.Sleep(time.Millisecond * time.Duration(n.timeStabilize))
 			n.stabilize()
-			time.Sleep(time.Millisecond * 300)
-			n.fixFingers()
-			time.Sleep(time.Millisecond * 300)
+			time.Sleep(time.Millisecond * time.Duration(n.timeFixFingers))
+			//	n.fixFingers()
+			time.Sleep(time.Millisecond * time.Duration(n.timeCheckPredecessor))
 			n.checkPredecessor()
 		}
 	}()
