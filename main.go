@@ -64,7 +64,7 @@ func main() {
 			fmt.Println("Joins existing node", args[1])
 
 		case "quit":
-			quit()
+			quit(ipAdd)
 
 		case "host":
 			fmt.Println("Hosts new node")
@@ -153,7 +153,8 @@ func getNode(args *HostArgs) *HostReply {
 	return &HostReply{}
 }
 
-func quit() {
+func quit(address NodeAddress) {
 	fmt.Println("\nQuitting program.")
-	os.Exit(0)
+	quitRPC(address)
+	//os.Exit(0)
 }

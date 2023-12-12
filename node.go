@@ -7,6 +7,7 @@ import (
 	"net"
 	"net/http"
 	"net/rpc"
+	"os"
 	"time"
 )
 
@@ -147,9 +148,24 @@ func (n *Node) create() {
 	//n.find_successor()
 }
 
+func (n *Node) Quit(n1 *struct{}, n2 *struct{}) error {
+	successor := n.Successors[0]
+	tmp_map := make(map[Key]string)
+
+	for k, v := range n.Bucket {
+		tmp_map[k] = v
+	}
+	ok := call(successor, "Node.Put_all", tmp_map, &struct{}{})
+	if !ok {
+		fmt.Println("Error moving the keys to the joined node")
+	}
+	os.Exit(0)
+	return nil
+}
+
 func (n *Node) fixFingers() {
 	n.Next = n.Next + 1
-	if n.Next > 160 {
+	if n.Next > fingerTableSize {
 		n.Next = 1
 	}
 	// nodeId := hashString(string(n.Address))
@@ -176,8 +192,9 @@ func (n *Node) fixFingers() {
 
 	for {
 		n.Next = n.Next + 1
-		if n.Next > 160 {
-			n.Next = 1
+		if n.Next > fingerTableSize {
+			n.Next = 0
+			return
 		}
 
 		requestId = jump(string(n.Address), n.Next)
@@ -243,7 +260,7 @@ func (n *Node) Find_successor(requestID *big.Int, reply *FindSuccReply) error {
 	nodeId.Mod(nodeId, hashMod)
 	successorId.Mod(successorId, hashMod)
 
-	recordHash(nodeId, successorId, requestID)
+	//recordHash(nodeId, successorId, requestID)
 
 	if between(nodeId, requestID, successorId, true) {
 		reply.Address = successor
@@ -388,7 +405,7 @@ func (n *Node) Notify(address NodeAddress, none *struct{}) error {
 	return nil
 }
 func (n *Node) Ping(args *HostArgs, reply *string) error {
-	fmt.Println("INSIDE")
+	//fmt.Println("INSIDE")
 	*reply = "Ping received"
 	return nil
 }
