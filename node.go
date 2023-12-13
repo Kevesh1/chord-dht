@@ -65,7 +65,7 @@ func CreateNode(args *CreateNodeArgs) {
 		timeCheckPredecessor: args.timeCheckPredecessor,
 	}
 	createFolders(&node)
-	//node.generateRSAKey(2048)
+	node.generateRSAKey(2048)
 	// node.Id.Mod(node.Id, hashMod)
 	createRing := args.Ring
 	if createRing {
@@ -130,6 +130,8 @@ func (n *Node) Quit(n1 *struct{}, n2 *struct{}) error {
 }
 
 func (n *Node) Get(args *GetArgs, reply *GetReply) error {
+	fmt.Println("[DEBUG: node.Get()]: args: ", args)
+	fmt.Println("[DEBUG: node.Get()]: n.Address: ", n.Address)
 	key := args.Key
 	if n.Bucket[key] == "true" {
 		encryptedBytes := ReadFileBytes("./tmp/" + string(n.Address) + "/" + string(key))
@@ -137,7 +139,7 @@ func (n *Node) Get(args *GetArgs, reply *GetReply) error {
 		if err != nil {
 			panic(err)
 		}
-		fmt.Println("DECRPTED: ")
+		fmt.Println("[DEBUG: node.Get()]: DECRYPTED output: ")
 		fmt.Println(string(decryptedBytes))
 	} else {
 		return fmt.Errorf("Key not found")
@@ -171,9 +173,9 @@ func (n *Node) Delete(args *DeleteArgs, reply *DeleteReply) error {
 }
 
 func (n *Node) Put(args *PutArgs, reply *PutReply) error {
-	//copy("./samples/"+string(args.FileKey), "./tmp/"+string(n.Address)+"/"+string(args.FileKey))
 	encryptedBytes, err := n.encrypt("./samples/" + string(args.FileKey))
 	if err != nil {
+		fmt.Println("error encrypting file,", args.FileKey)
 		panic(err)
 	}
 	err = os.WriteFile("./tmp/"+string(n.Address)+"/"+string(args.FileKey), encryptedBytes, 0777)
@@ -217,6 +219,7 @@ func (n *Node) Put_all(bucket map[Key]string, reply *PutReply) {
 			ReadFileBytes("./samples/"+string(key)),
 			nil)
 		if err != nil {
+			fmt.Println("[DEBUG node.Put_all()]: error encrypting file,", key)
 			panic(err)
 		}
 		err = os.WriteFile("./tmp/"+string(n.Address)+"/"+string(key), encryptedBytes, 0777)
@@ -225,7 +228,6 @@ func (n *Node) Put_all(bucket map[Key]string, reply *PutReply) {
 }
 
 func (n *Node) Get_all(address NodeAddress, none *struct{}) error {
-	fmt.Println("[DEBUG: node.Get_all()] Called (", address, ")")
 	insertId := hashString(string(address))
 	insertId.Mod(insertId, hashMod)
 	nodeId := hashString(string(n.Address))
@@ -366,14 +368,8 @@ func (n *Node) Join(newNode NodeAddress, r *JoinReply) error {
 		fmt.Println("ERROR")
 	}
 	n.Successors[0] = reply.Address
-	ok = call(n.Successors[0], "Node.Get_all", n.Address, &struct{}{})
-	//n.Get_all(n.Successors[0])
+	ok = call(n.Address, "Node.Get_all", n.Successors[0], &struct{}{})
 
-	// if between(nodeId, newNodeId, hashString(string(n.Successors[0])), false) || n.Successors[0] == n.Address {
-	// 	n.Successors[0] = newNode
-	// } else {
-	// 	call(n.Successors[0], "Node.Join", newNode, &JoinReply{})
-	// }
 	return nil
 }
 
@@ -401,7 +397,6 @@ func (n *Node) Find_successor(requestID *big.Int, reply *FindSuccReply) error {
 	} else {
 
 		nextSuccessor := n.closest_preceding_node(requestID)
-		fmt.Println("[DEBUG node.FindSuccessor()] Calling for next node: ", successor)
 		call(nextSuccessor, "Node.Find_successor", requestID, &FindSuccReply{})
 		reply.Address = successor
 		reply.Found = false
@@ -471,18 +466,25 @@ func (n *Node) GetSuccessors(none *struct{}, reply *SuccessorsListReply) error {
 }
 
 func (n *Node) stabilize() {
+	//i := 0
+	//fmt.Println(i)
+	//i++
 	successor := n.Successors[0]
 	var successorsReply SuccessorsListReply
 	ok := call(successor, "Node.GetSuccessors", &struct{}{}, &successorsReply)
 	successors := successorsReply.Successors
 	if ok {
 		for i := 0; i < n.numberSuccessors-2; i++ {
+			//fmt.Println(i)
+			// fmt.Println(len(n.Successors))
+			// fmt.Println(len(successors))
 			n.Successors[i+1] = successors[i]
 
 		}
 	} else {
 		fmt.Println("GetSuccessors failed")
 		if successor == "" {
+			fmt.Println("Successor is empty, setting successor address to itself")
 			n.Successors[0] = n.Address
 		} else {
 			for i := 0; i < n.numberSuccessors-1; i++ {
