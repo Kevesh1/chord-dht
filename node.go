@@ -235,7 +235,6 @@ func (n *Node) Get_all(address NodeAddress, none *struct{}) error {
 	nodeId.Mod(nodeId, hashMod)
 
 	tmp_map := make(map[Key]string)
-	//if between(predecessorId, insertId, nodeId, true) {
 	fmt.Println("[DEBUG node.Get_all()] insterID:", insertId)
 	fmt.Println("[DEBUG node.Get_all()] nodeId:", nodeId)
 	fmt.Println("[DEBUG node.Get_all()] n.Bucket: ", n.Bucket)
@@ -254,16 +253,12 @@ func (n *Node) Get_all(address NodeAddress, none *struct{}) error {
 		fmt.Println("Error moving the keys to the joined node")
 	}
 	return nil
-
-	//}
-
 }
 
 // Create chord ring
 func (n *Node) create() {
 	n.Predecessor = ""
 	n.Successors[0] = n.Address
-	//n.find_successor()
 }
 
 func (n *Node) fixFingers() {
@@ -271,8 +266,6 @@ func (n *Node) fixFingers() {
 	if n.Next > fingerTableSize {
 		n.Next = 1
 	}
-	// nodeId := hashString(string(n.Address))
-	// nodeId.Mod(nodeId, hashMod)
 
 	requestId := jump(string(n.Address), n.Next)
 
@@ -286,7 +279,6 @@ func (n *Node) fixFingers() {
 		return
 	}
 	if !reply.Found {
-		//fmt.Println("Could not find successor")
 		return
 	}
 	succesorId := hashString(string(reply.Address))
@@ -318,7 +310,6 @@ func (n *Node) checkPredecessor() {
 			fmt.Println("[DEBUG: node.checkPredecessor()] Predecessor is dead")
 			n.Predecessor = ""
 
-			//TODO backup logic
 		}
 	}
 }
@@ -355,8 +346,6 @@ func (n *Node) Find_successor(requestID *big.Int, reply *FindSuccReply) error {
 	successorId := hashString(string(successor))
 	nodeId.Mod(nodeId, hashMod)
 	successorId.Mod(successorId, hashMod)
-
-	//recordHash(nodeId, successorId, requestID)
 
 	if between(nodeId, requestID, successorId, true) {
 		reply.Address = successor
@@ -412,8 +401,6 @@ func (n *Node) closest_preceding_node(requestID *big.Int) NodeAddress {
 			return n.FingerTable[i]
 		}
 	}
-	// if (finger[i] ∈ (n,id])
-	// 	return finger[i];
 	return n.Successors[0]
 }
 
@@ -434,18 +421,12 @@ func (n *Node) GetSuccessors(none *struct{}, reply *SuccessorsListReply) error {
 }
 
 func (n *Node) stabilize() {
-	//i := 0
-	//fmt.Println(i)
-	//i++
 	successor := n.Successors[0]
 	var successorsReply SuccessorsListReply
 	ok := call(successor, "Node.GetSuccessors", &struct{}{}, &successorsReply)
 	successors := successorsReply.Successors
 	if ok {
 		for i := 0; i < n.numberSuccessors-2; i++ {
-			//fmt.Println(i)
-			// fmt.Println(len(n.Successors))
-			// fmt.Println(len(successors))
 			n.Successors[i+1] = successors[i]
 
 		}
@@ -479,7 +460,6 @@ func (n *Node) stabilize() {
 		n.Successors[0] = predecessor
 	}
 	call(successor, "Node.Notify", n.Address, &struct{}{})
-	//fmt.Print(successor)
 }
 
 func (n *Node) Notify(address NodeAddress, none *struct{}) error {
