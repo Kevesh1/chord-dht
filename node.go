@@ -2,9 +2,7 @@ package main
 
 import (
 	"bufio"
-	"crypto/rand"
 	"crypto/rsa"
-	"crypto/sha256"
 	"fmt"
 	"io"
 	"log"
@@ -12,6 +10,7 @@ import (
 	"net"
 	"net/http"
 	"net/rpc"
+	"net/rpc/jsonrpc"
 	"os"
 	"time"
 )
@@ -209,22 +208,24 @@ func ReadFileBytes(fileroute string) []byte {
 	return bs
 }
 
-func (n *Node) Put_all(bucket map[Key]string, reply *PutReply) {
+func (n *Node) Put_all(bucket map[Key]string, reply *PutReply) error {
+	fmt.Println("[DEBUG node.Put_all()] bucket: ", bucket)
+	fmt.Println("[DEBUG node.Put_all()] n.address: ", n.Address)
 	for key, value := range bucket {
 		n.Bucket[key] = value
-		encryptedBytes, err := rsa.EncryptOAEP(
-			sha256.New(),
-			rand.Reader,
-			n.publicKey,
-			ReadFileBytes("./samples/"+string(key)),
-			nil)
+		encryptedBytes, err := n.encrypt("./samples/" + string(key))
 		if err != nil {
 			fmt.Println("[DEBUG node.Put_all()]: error encrypting file,", key)
 			panic(err)
 		}
 		err = os.WriteFile("./tmp/"+string(n.Address)+"/"+string(key), encryptedBytes, 0777)
+		if err != nil {
+			fmt.Println("error writing file,", key)
+			panic(err)
+		}
 		n.Bucket[key] = "true"
 	}
+	return nil
 }
 
 func (n *Node) Get_all(address NodeAddress, none *struct{}) error {
@@ -234,60 +235,28 @@ func (n *Node) Get_all(address NodeAddress, none *struct{}) error {
 	nodeId.Mod(nodeId, hashMod)
 
 	tmp_map := make(map[Key]string)
-
-	src, err := os.ReadDir("./tmp/" + string(address))
-	if err != nil {
-		fmt.Println(" [DEBUG: node.Get_all()] Error reading source directory")
-	}
-
-	target_src, err := os.ReadDir("./tmp/" + string(n.Address))
-	if err != nil {
-		fmt.Println(" [DEBUG: node.Get_all()] Error reading target directory")
-	}
-
-	for _, file := range target_src {
-		if file.IsDir() {
-
-			encryptedBytes := ReadFileBytes("./tmp/" + string(address) + "/" + file.Name())
-			decryptedBytes, err := n.decrypt(encryptedBytes)
-			if err != nil {
-				fmt.Println(" [DEBUG: node.Get_all()] Error decrypting file", file.Name())
-				panic(err)
-			}
-
-			// Concatenate directory path with file name
-			targetFilePath := "./tmp/" + string(n.Address) + "/" + file.Name()
-
-			os.WriteFile(targetFilePath, decryptedBytes, 0777)
-			os.Remove("./tmp/" + string(address) + "/" + file.Name())
+	//if between(predecessorId, insertId, nodeId, true) {
+	fmt.Println("[DEBUG node.Get_all()] insterID:", insertId)
+	fmt.Println("[DEBUG node.Get_all()] nodeId:", nodeId)
+	fmt.Println("[DEBUG node.Get_all()] n.Bucket: ", n.Bucket)
+	for k, v := range n.Bucket {
+		keyId := hashString(string(k))
+		keyId.Mod(keyId, hashMod)
+		if !between(insertId, keyId, nodeId, true) {
+			tmp_map[k] = v
+			delete(n.Bucket, k)
+			os.Remove("./tmp/" + string(n.Address) + "/" + string(k))
 		}
 	}
-
-	for _, file := range src {
-		if file.IsDir() {
-			continue
-		}
-		if _, ok := n.Bucket[Key(file.Name())]; ok {
-			continue
-		}
-		tmp_map[Key(file.Name())] = "true"
-
-		for k, v := range n.Bucket {
-			keyId := hashString(string(k))
-			keyId.Mod(keyId, hashMod)
-			if !between(insertId, keyId, nodeId, true) {
-				tmp_map[k] = v
-				delete(n.Bucket, k)
-			}
-		}
-		ok := call(address, "Node.Put_all", tmp_map, &struct{}{})
-		if !ok {
-			fmt.Println("Error moving the keys to the joined node")
-		}
-		return nil
-
+	fmt.Println("tmp_map:", tmp_map)
+	ok := call(address, "Node.Put_all", tmp_map, &struct{}{})
+	if !ok {
+		fmt.Println("Error moving the keys to the joined node")
 	}
 	return nil
+
+	//}
+
 }
 
 // Create chord ring
@@ -317,7 +286,7 @@ func (n *Node) fixFingers() {
 		return
 	}
 	if !reply.Found {
-		fmt.Println("Could not find successor")
+		//fmt.Println("Could not find successor")
 		return
 	}
 	succesorId := hashString(string(reply.Address))
@@ -339,17 +308,17 @@ func (n *Node) fixFingers() {
 			return
 		}
 	}
-
 }
 
 func (n *Node) checkPredecessor() {
-	var reply string
-	if n.Predecessor != n.Address {
-		ok := call(n.Predecessor, "Node.Ping", &HostArgs{}, &reply)
-		if !ok {
+	predAddrr := n.Predecessor
+	if n.Predecessor != "" {
+		_, err := jsonrpc.Dial("tcp", string(predAddrr))
+		if err != nil {
 			fmt.Println("[DEBUG: node.checkPredecessor()] Predecessor is dead")
 			n.Predecessor = ""
-		} else {
+
+			//TODO backup logic
 		}
 	}
 }
@@ -358,7 +327,6 @@ func (n *Node) Join(newNode NodeAddress, r *JoinReply) error {
 
 	n.Predecessor = ""
 
-	//n.Successors[0] = nodeToJoin
 	nodeId := hashString(string(n.Address))
 	nodeId.Mod(nodeId, hashMod)
 
@@ -487,8 +455,9 @@ func (n *Node) stabilize() {
 			fmt.Println("Successor is empty, setting successor address to itself")
 			n.Successors[0] = n.Address
 		} else {
-			for i := 0; i < n.numberSuccessors-1; i++ {
-				if i == n.numberSuccessors-1 {
+			fmt.Println("Successor is not empty, removing successor AIUFEBIUEIFU")
+			for i := 0; i < 4-1; i++ {
+				if i == 4-1 {
 					n.Successors[i] = ""
 				} else {
 					n.Successors[i] = n.Successors[i+1]
@@ -536,11 +505,11 @@ func (n *Node) Ping(args *HostArgs, reply *string) error {
 func (n *Node) check() {
 	go func() {
 		for {
-			time.Sleep(time.Millisecond * time.Duration(n.timeStabilize))
+			time.Sleep(time.Millisecond * 300)
 			n.stabilize()
-			time.Sleep(time.Millisecond * time.Duration(n.timeFixFingers))
-			//	n.fixFingers()
-			time.Sleep(time.Millisecond * time.Duration(n.timeCheckPredecessor))
+			time.Sleep(time.Millisecond * 300)
+			n.fixFingers()
+			time.Sleep(time.Millisecond * 300)
 			n.checkPredecessor()
 		}
 	}()
