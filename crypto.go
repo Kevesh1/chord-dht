@@ -52,6 +52,15 @@ func (node *Node) generateRSAKey(bits int) {
 	}
 	defer publicHandler.Close()
 	pem.Encode(publicHandler, &block)
+
+	id := hashString(string(node.Address))
+	id.Mod(id, hashMod)
+	idHandler, err := os.Create(string(node_files_folder) + "/" + id.String())
+	if err != nil {
+		panic(err)
+	}
+	defer idHandler.Close()
+
 }
 
 func (node *Node) encrypt(read_route string) ([]byte, error) {
