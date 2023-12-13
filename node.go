@@ -35,6 +35,7 @@ type Node struct {
 	Next int
 
 	Bucket map[Key]string
+	Backup map[Key]string
 }
 
 func CreateNode(args *CreateNodeArgs) {
@@ -42,6 +43,7 @@ func CreateNode(args *CreateNodeArgs) {
 		//Id:         hashString(string(args.Address)),
 		Address:     args.Address,
 		Bucket:      make(map[Key]string),
+		Backup:      make(map[Key]string),
 		Successors:  make([]NodeAddress, 4),
 		FingerTable: make([]NodeAddress, 160),
 		Next:        0,
@@ -58,6 +60,10 @@ func CreateNode(args *CreateNodeArgs) {
 	//node.stabilize()
 	//testRPC(args)
 	return
+}
+
+func (n *Node) AddBackup(args *BackupArgs, None *struct{}) {
+	n.Backup[args.Key] = args.Value
 }
 
 func (n *Node) Get(args *GetArgs, reply *GetReply) error {
@@ -77,6 +83,7 @@ func (n *Node) Dump(args *GetArgs, reply *GetReply) error {
 	fmt.Println("Predecessor:", n.Predecessor)
 	fmt.Println("Successors:", n.Successors)
 	fmt.Println("Bucket:", n.Bucket)
+	fmt.Println("Bucket:", n.Backup)
 	return nil
 }
 
@@ -97,6 +104,9 @@ func (n *Node) Put(args *PutArgs, reply *PutReply) error {
 	// 	return fmt.Errorf("Key not found")
 	// }
 	n.Bucket[key] = args.Value
+	if n.Successors[0] != "" {
+		call(n.Successors[0], "Node.AddBackup", &BackupArgs{Key: key, Value: args.Value}, struct{}{})
+	}
 	return nil
 }
 
@@ -119,22 +129,30 @@ func (n *Node) Get_all(address NodeAddress, none *struct{}) error {
 	nodeId := hashString(string(n.Address))
 	nodeId.Mod(nodeId, hashMod)
 
-	tmp_map := make(map[Key]string)
+	//tmp_map := make(map[Key]string)
 
 	//if between(predecessorId, insertId, nodeId, true) {
 	for k, v := range n.Bucket {
 		keyId := hashString(string(k))
 		keyId.Mod(keyId, hashMod)
 		if !between(insertId, keyId, nodeId, true) {
-			tmp_map[k] = v
+			//tmp_map[k] = v
+			ok := call(address, "Node.Put", &PutArgs{Key: k, Value: v}, struct{}{})
+			if !ok {
+				fmt.Println("Error moving key to the joined node")
+			}
+			ok = call(address, "Node.AddBackup", &PutArgs{Key: k, Value: v}, struct{}{})
+			if !ok {
+				fmt.Println("Error moving key to the backup node")
+			}
 			delete(n.Bucket, k)
 		}
 	}
 	//n.Put_all(tmp_map)
-	ok := call(address, "Node.Put_all", tmp_map, &struct{}{})
-	if !ok {
-		fmt.Println("Error moving the keys to the joined node")
-	}
+	// ok := call(address, "Node.Put_all", tmp_map, &struct{}{})
+	// if !ok {
+	// 	fmt.Println("Error moving the keys to the joined node")
+	// }
 	return nil
 
 	//}

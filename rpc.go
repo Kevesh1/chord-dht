@@ -81,3 +81,9 @@ type AddressReply struct {
 type SuccessorsListReply struct {
 	Successors []NodeAddress
 }
+
+type BackupArgs struct {
+	//Address NodeAddress
+	Key   Key
+	Value string
+}
