@@ -34,7 +34,7 @@ func cli(ipAdd NodeAddress) {
 			printHelp()
 
 		case "port":
-			if len(args) < 2 {
+			if len(args) != 1 {
 				fmt.Println("Usage: port <port>")
 				continue
 			}
