@@ -22,9 +22,9 @@ func testRPC(args *CreateNodeArgs) {
 func getRPC(address NodeAddress, key Key) {
 	addr, err := ClientLookup(key, address)
 	if err != nil {
-		fmt.Println("[DEBUG node.Put()] Error in ClientLookup(): ", err)
+		fmt.Println("[DEBUG node.Get()] Error in ClientLookup(): ", err)
 	} else {
-		fmt.Println("[DEBUG node.Put()] Found address: ", addr)
+		fmt.Println("[DEBUG node.getRPC()] Found address: ", addr)
 	}
 	ok := call(addr, "Node.Get", &GetArgs{Key: key}, &GetReply{})
 	if !ok {
@@ -35,18 +35,20 @@ func getRPC(address NodeAddress, key Key) {
 }
 
 // Calls Put() inside node.go
-func putRPC(address NodeAddress, key Key, value string) {
+func putRPC(address NodeAddress, key Key) {
 	addr, err := ClientLookup(key, address)
 	if err != nil {
 		fmt.Println("[DEBUG node.Put()] Error in ClientLookup(): ", err)
 	} else {
 		fmt.Println("[DEBUG node.Put()] Found address: ", addr)
 	}
-	ok := call(addr, "Node.Put", &PutArgs{Key: key, Value: value}, &PutReply{})
+	ok := call(addr, "Node.Put", &PutArgs{FileKey: key}, &PutReply{})
 	if !ok {
 		fmt.Println("[DEBUG node.Put()] Error in call(): ", err)
 	} else {
 		// File logic for cypher
+		index := hashString(string(key)).Mod(hashString(string(key)), hashMod)
+		recordHash(string(key), index)
 	}
 }
 

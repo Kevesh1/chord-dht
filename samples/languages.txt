@@ -1,0 +1,4 @@
+swedish
+english
+german
+spanish

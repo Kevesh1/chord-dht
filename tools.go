@@ -3,16 +3,14 @@ package main
 import (
 	"crypto/sha1"
 	"errors"
-	"fmt"
 	"math/big"
 	"os"
 )
 
 // Records values and states when hashing node vals
-// Values are stored in hash_records.txt, 'H' stands for hashed
-// @params:HnodeID, HrequestID, HsucessorID
 func recordHash(
-	HnodeId *big.Int, HrequestId *big.Int, HsucessorId *big.Int,
+	rawtext string,
+	hashedValue *big.Int,
 ) error {
 
 	file, err := os.OpenFile("hash_records.txt", os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
@@ -22,12 +20,9 @@ func recordHash(
 	defer file.Close()
 	file.WriteString("\n <-- NEW RECORD --> \n")
 	//Write nodeID before and after hashed
-	file.WriteString("tHNodeID: " + HnodeId.String() + "\n")
 	//Write requestID before and after hashed
-	file.WriteString("HRequestID: " + HrequestId.String() + "\n")
-	//Write sucessorID before and after hashed
-	file.WriteString("HSucessorID: " + HsucessorId.String() + "\n")
-	fmt.Println("Hashes recorded in hash_records.txt")
+	file.WriteString("tHRequestID: " + rawtext + "\n")
+	file.WriteString("HRequestID: " + hashedValue.String() + "\n")
 	return nil
 }
 

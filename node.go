@@ -1,7 +1,10 @@
 package main
 
 import (
+	"bufio"
+	"crypto/rsa"
 	"fmt"
+	"io"
 	"log"
 	"math/big"
 	"net"
@@ -27,127 +30,84 @@ var hashMod *big.Int = new(big.Int).Exp(big.NewInt(2), big.NewInt(int64(MODULO))
 type Node struct {
 	//Id *big.Int
 
-	Address     NodeAddress
-	FingerTable []NodeAddress
-	Predecessor NodeAddress
-	Successors  []NodeAddress
+	timeFixFingers       int
+	timeStabilize        int
+	timeCheckPredecessor int
+
+	Address          NodeAddress
+	FingerTable      []NodeAddress
+	Predecessor      NodeAddress
+	Successors       []NodeAddress
+	numberSuccessors int
 
 	Next int
 
 	Bucket map[Key]string
 	Backup map[Key]string
+
+	privateKey *rsa.PrivateKey
+	publicKey  *rsa.PublicKey
 }
 
 func CreateNode(args *CreateNodeArgs) {
 	node := Node{
+		numberSuccessors: args.numberSuccessors,
+
 		Address:     args.Address,
 		Bucket:      make(map[Key]string),
 		Backup:      make(map[Key]string),
 		Successors:  make([]NodeAddress, 4),
 		FingerTable: make([]NodeAddress, 160),
 		Next:        0,
+
+		timeFixFingers:       args.timeFixFingers,
+		timeStabilize:        args.timeStabilize,
+		timeCheckPredecessor: args.timeCheckPredecessor,
 	}
+	createFolders(&node)
+	node.generateRSAKey(2048)
 	createRing := args.Ring
 	if createRing {
 		node.create()
-		fmt.Println("INSIDE")
 	}
 	go node.server()
 	node.check()
 	return
 }
 
-func (n *Node) AddBackup(args *BackupArgs, None *struct{}) error {
-	n.Backup[args.Key] = args.Value
-	return nil
-}
-
-func (n *Node) GetBucket(none *struct{}, reply *BucketReply) error {
-	reply.Bucket = n.Bucket
-	return nil
-}
-
-func (n *Node) Get(args *GetArgs, reply *GetReply) error {
-	key := args.Key
-	_, ok := n.Bucket[key]
-	if !ok {
-		return fmt.Errorf("Key not found")
+// Helper function to node.CreateNode() for setting up tmp folders for file storage
+func createFolders(node *Node) {
+	route := "tmp/" + string(node.Address)
+	err := os.MkdirAll(route, 0777)
+	if err != nil {
+		fmt.Println("Error creating tmp folder")
 	}
-	fmt.Println(n.Bucket[key])
-	return nil
 }
 
-func (n *Node) Dump(args *GetArgs, reply *GetReply) error {
-	//Dumb all attributes of node n
-	fmt.Println("Address:", n.Address)
-	fmt.Println("FingerTable:", n.FingerTable)
-	fmt.Println("Predecessor:", n.Predecessor)
-	fmt.Println("Successors:", n.Successors)
-	fmt.Println("Bucket:", n.Bucket)
-	fmt.Println("Backup:", n.Backup)
-	return nil
-}
-
-func (n *Node) Delete(args *DeleteArgs, reply *DeleteReply) error {
-	key := args.Key
-	_, ok := n.Bucket[key]
-	if !ok {
-		return fmt.Errorf("Key not found")
-	}
-	delete(n.Bucket, key)
-	return nil
-}
-
-func (n *Node) Put(args *PutArgs, reply *PutReply) error {
-	key := args.Key
-
-	n.Bucket[key] = args.Value
-	return nil
-}
-
-func (n *Node) Put_all(bucket map[Key]string, reply *PutReply) error {
-	fmt.Println("PUT ALL")
-	for key, value := range bucket {
-		n.Bucket[key] = value
-	}
-	return nil
-}
-
-func (n *Node) Get_all(address NodeAddress, none *struct{}) error {
-	fmt.Println("GET ALL")
-	fmt.Println(address)
-	insertId := hashString(string(address))
-	insertId.Mod(insertId, hashMod)
-	nodeId := hashString(string(n.Address))
-	nodeId.Mod(nodeId, hashMod)
-
-	tmp_map := make(map[Key]string)
-
-	fmt.Println("INSIDE GET ALL")
-	fmt.Println(n.Address)
-	fmt.Println(address)
-	for k, v := range n.Bucket {
-		keyId := hashString(string(k))
-		keyId.Mod(keyId, hashMod)
-		if !between(insertId, keyId, nodeId, true) {
-			fmt.Println("INSIDE IF !BETWEEN")
-			tmp_map[k] = v
-			delete(n.Bucket, k)
-		}
+// Helper function that copies a file from src to dst
+func copy(src, dst string) (int64, error) {
+	sourceFileStat, err := os.Stat(src)
+	if err != nil {
+		return 0, err
 	}
 
-	ok := call(address, "Node.Put_all", tmp_map, &struct{}{})
-	if !ok {
-		fmt.Println("Error moving the keys to the joined node")
+	if !sourceFileStat.Mode().IsRegular() {
+		return 0, fmt.Errorf("%s is not a regular file", src)
 	}
-	return nil
 
-}
+	source, err := os.Open(src)
+	if err != nil {
+		return 0, err
+	}
+	defer source.Close()
 
-// Create chord ring
-func (n *Node) create() {
-	n.Predecessor = ""
-	n.Successors[0] = n.Address
+	destination, err := os.Create(dst)
+	if err != nil {
+		return 0, err
+	}
+	defer destination.Close()
+	nBytes, err := io.Copy(destination, source)
+	return nBytes, err
 }
 
 func (n *Node) Quit(n1 *struct{}, n2 *struct{}) error {
@@ -163,6 +123,150 @@ func (n *Node) Quit(n1 *struct{}, n2 *struct{}) error {
 	}
 	os.Exit(0)
 	return nil
+}
+
+func (n *Node) AddBackup(args *BackupArgs, None *struct{}) error {
+	n.Backup[args.Key] = args.Value
+	return nil
+}
+
+func (n *Node) GetBucket(none *struct{}, reply *BucketReply) error {
+	reply.Bucket = n.Bucket
+	return nil
+}
+
+func (n *Node) Get(args *GetArgs, reply *GetReply) error {
+	fmt.Println("[DEBUG: node.Get()]: args: ", args)
+	fmt.Println("[DEBUG: node.Get()]: n.Address: ", n.Address)
+	key := args.Key
+	if n.Bucket[key] == "true" {
+		encryptedBytes := ReadFileBytes("./tmp/" + string(n.Address) + "/" + string(key))
+		decryptedBytes, err := n.decrypt(encryptedBytes)
+		if err != nil {
+			panic(err)
+		}
+		fmt.Println("[DEBUG: node.Get()]: DECRYPTED output: ")
+		fmt.Println(string(decryptedBytes))
+	} else {
+		return fmt.Errorf("Key not found")
+	}
+	return nil
+}
+
+func (n *Node) Dump(args *GetArgs, reply *GetReply) error {
+	//Dumb all attributes of node n
+	fmt.Println("Address:", n.Address)
+	fmt.Println("FingerTable:", n.FingerTable)
+	fmt.Println("Predecessor:", n.Predecessor)
+	fmt.Println("Successors:", n.Successors)
+	fmt.Println("numberSuccessors:", n.numberSuccessors)
+	fmt.Println("Bucket:", n.Bucket)
+	fmt.Println("timeFixFingers:", n.timeFixFingers, "ms")
+	fmt.Println("timeStabilize:", n.timeStabilize, "ms")
+	fmt.Println("timeCheckPredecessor:", n.timeCheckPredecessor, "ms")
+	fmt.Println("Backup:", n.Backup)
+	return nil
+}
+
+func (n *Node) Delete(args *DeleteArgs, reply *DeleteReply) error {
+	key := args.Key
+	_, ok := n.Bucket[key]
+	if !ok {
+		return fmt.Errorf("Key not found")
+	}
+	delete(n.Bucket, key)
+	return nil
+}
+
+func (n *Node) Put(args *PutArgs, reply *PutReply) error {
+	encryptedBytes, err := n.encrypt("./samples/" + string(args.FileKey))
+	if err != nil {
+		fmt.Println("error encrypting file,", args.FileKey)
+		panic(err)
+	}
+	err = os.WriteFile("./tmp/"+string(n.Address)+"/"+string(args.FileKey), encryptedBytes, 0777)
+	n.Bucket[args.FileKey] = "true"
+	return nil
+}
+
+// Helper function to Put() for reading a file into a byte slice
+func ReadFileBytes(fileroute string) []byte {
+	file, err := os.Open(fileroute)
+	if err != nil {
+		fmt.Println(err)
+		return nil
+	}
+	defer file.Close()
+
+	// Get the file size
+	stat, err := file.Stat()
+	if err != nil {
+		fmt.Println(err)
+		return nil
+	}
+
+	// Read the file into a byte slice
+	bs := make([]byte, stat.Size())
+	_, err = bufio.NewReader(file).Read(bs)
+	if err != nil && err != io.EOF {
+		fmt.Println(err)
+		return nil
+	}
+	return bs
+}
+
+func (n *Node) Put_all(bucket map[Key]string, reply *PutReply) error {
+	fmt.Println("[DEBUG node.Put_all()] bucket: ", bucket)
+	fmt.Println("[DEBUG node.Put_all()] n.address: ", n.Address)
+	for key, value := range bucket {
+		n.Bucket[key] = value
+		encryptedBytes, err := n.encrypt("./samples/" + string(key))
+		if err != nil {
+			fmt.Println("[DEBUG node.Put_all()]: error encrypting file,", key)
+			panic(err)
+		}
+		err = os.WriteFile("./tmp/"+string(n.Address)+"/"+string(key), encryptedBytes, 0777)
+		if err != nil {
+			fmt.Println("error writing file,", key)
+			panic(err)
+		}
+		n.Bucket[key] = "true"
+	}
+	return nil
+}
+
+func (n *Node) Get_all(address NodeAddress, none *struct{}) error {
+	insertId := hashString(string(address))
+	insertId.Mod(insertId, hashMod)
+	nodeId := hashString(string(n.Address))
+	nodeId.Mod(nodeId, hashMod)
+
+	tmp_map := make(map[Key]string)
+	fmt.Println("[DEBUG node.Get_all()] insterID:", insertId)
+	fmt.Println("[DEBUG node.Get_all()] nodeId:", nodeId)
+	fmt.Println("[DEBUG node.Get_all()] n.Bucket: ", n.Bucket)
+
+	for k, v := range n.Bucket {
+		keyId := hashString(string(k))
+		keyId.Mod(keyId, hashMod)
+		if !between(insertId, keyId, nodeId, true) {
+			fmt.Println("INSIDE IF !BETWEEN")
+			tmp_map[k] = v
+			delete(n.Bucket, k)
+			os.Remove("./tmp/" + string(n.Address) + "/" + string(k))
+		}
+	}
+	ok := call(address, "Node.Put_all", tmp_map, &struct{}{})
+	if !ok {
+		fmt.Println("Error moving the keys to the joined node")
+	}
+	return nil
+}
+
+// Create chord ring
+func (n *Node) create() {
+	n.Predecessor = ""
+	n.Successors[0] = n.Address
 }
 
 func (n *Node) fixFingers() {
@@ -183,7 +287,6 @@ func (n *Node) fixFingers() {
 		return
 	}
 	if !reply.Found {
-		//fmt.Println("Could not find successor")
 		return
 	}
 	succesorId := hashString(string(reply.Address))
@@ -205,12 +308,12 @@ func (n *Node) fixFingers() {
 			return
 		}
 	}
-
 }
 
 func (n *Node) checkPredecessor() {
 	var reply string
 	if n.Predecessor != "" {
+		//kanske jsonrpc istället??
 		ok := call(n.Predecessor, "Node.Ping", &HostArgs{}, &reply)
 		if !ok {
 			fmt.Println("[DEBUG: node.checkPredecessor()] Predecessor is dead")
@@ -218,6 +321,16 @@ func (n *Node) checkPredecessor() {
 			for k, v := range n.Backup {
 				if v != "" {
 					n.Bucket[k] = v
+					encryptedBytes, err := n.encrypt("./samples/" + string(k))
+					if err != nil {
+						fmt.Println("[DEBUG checkPredecessor()]: error encrypting file,", k)
+						panic(err)
+					}
+					err = os.WriteFile("./tmp/"+string(n.Address)+"/"+string(k), encryptedBytes, 0777)
+					if err != nil {
+						fmt.Println("[DEBUG checkPredecessor()]: error writing file,", k)
+						panic(err)
+					}
 				}
 			}
 		}
@@ -228,7 +341,6 @@ func (n *Node) Join(newNode NodeAddress, r *JoinReply) error {
 
 	n.Predecessor = ""
 
-	//n.Successors[0] = nodeToJoin
 	nodeId := hashString(string(n.Address))
 	nodeId.Mod(nodeId, hashMod)
 
@@ -238,10 +350,7 @@ func (n *Node) Join(newNode NodeAddress, r *JoinReply) error {
 		fmt.Println("ERROR")
 	}
 	n.Successors[0] = reply.Address
-	fmt.Println("THE REPLY ADRESS::::::")
-	fmt.Println(reply.Address)
-	time.Sleep(time.Second * 5)
-	ok = call(n.Successors[0], "Node.Get_all", n.Address, &struct{}{})
+	ok = call(n.Address, "Node.Get_all", n.Successors[0], &struct{}{})
 
 	return nil
 }
@@ -259,16 +368,14 @@ func (n *Node) Find_successor(requestID *big.Int, reply *FindSuccReply) error {
 	nodeId.Mod(nodeId, hashMod)
 	successorId.Mod(successorId, hashMod)
 
-	//recordHash(nodeId, successorId, requestID)
-
 	if between(nodeId, requestID, successorId, true) {
 		reply.Address = n.Successors[0]
 		reply.Found = true
 
 	} else {
 		nextSuccessor := n.closest_preceding_node(requestID)
+
 		var reply2 FindSuccReply
-		//fmt.Println("[DEBUG node.FindSuccessor()] Calling for next node: ", successor)
 		ok := call(nextSuccessor, "Node.Find_successor", requestID, &reply2)
 		if !ok {
 			reply.Found = false
@@ -320,7 +427,6 @@ func (n *Node) closest_preceding_node(requestID *big.Int) NodeAddress {
 			return n.FingerTable[i]
 		}
 	}
-
 	return n.Successors[0]
 }
 
@@ -341,13 +447,12 @@ func (n *Node) GetSuccessors(none *struct{}, reply *SuccessorsListReply) error {
 }
 
 func (n *Node) stabilize() {
-
 	successor := n.Successors[0]
 	var successorsReply SuccessorsListReply
 	ok := call(successor, "Node.GetSuccessors", &struct{}{}, &successorsReply)
 	successors := successorsReply.Successors
 	if ok {
-		for i := 0; i < 4-2; i++ {
+		for i := 0; i < n.numberSuccessors-2; i++ {
 			n.Successors[i+1] = successors[i]
 		}
 	} else {
@@ -406,7 +511,6 @@ func (n *Node) Notify(address NodeAddress, none *struct{}) error {
 	return nil
 }
 func (n *Node) Ping(args *HostArgs, reply *string) error {
-	//fmt.Println("INSIDE")
 	*reply = "Ping received"
 	return nil
 }
