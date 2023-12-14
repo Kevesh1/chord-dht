@@ -155,5 +155,6 @@ func getNode(args *HostArgs) *HostReply {
 
 func quit(address NodeAddress) {
 	fmt.Println("\nQuitting program.")
-	os.Exit(0)
+	quitRPC(address)
+	//os.Exit(0)
 }

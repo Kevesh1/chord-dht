@@ -29,9 +29,4 @@ func main() {
 
 	// Command line interface, handles all commands listed in: https://computing.utahtech.edu/cs/3410/asst_chord.html
 	cli(ipAdd)
-
-func quit(address NodeAddress) {
-	fmt.Println("\nQuitting program.")
-	quitRPC(address)
-	//os.Exit(0)
 }

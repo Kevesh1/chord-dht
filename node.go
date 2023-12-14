@@ -10,7 +10,6 @@ import (
 	"net"
 	"net/http"
 	"net/rpc"
-	"net/rpc/jsonrpc"
 	"os"
 	"time"
 )
@@ -45,7 +44,6 @@ type Node struct {
 
 	Bucket map[Key]string
 	Backup map[Key]string
-  
 
 	privateKey *rsa.PrivateKey
 	publicKey  *rsa.PublicKey
@@ -53,21 +51,21 @@ type Node struct {
 
 func CreateNode(args *CreateNodeArgs) {
 	node := Node{
-  numberSuccessors: args.numberSuccessors,
+		numberSuccessors: args.numberSuccessors,
+
+		Address:     args.Address,
+		Bucket:      make(map[Key]string),
+		Backup:      make(map[Key]string),
+		Successors:  make([]NodeAddress, 4),
+		FingerTable: make([]NodeAddress, 160),
+		Next:        0,
+
+		timeFixFingers:       args.timeFixFingers,
+		timeStabilize:        args.timeStabilize,
+		timeCheckPredecessor: args.timeCheckPredecessor,
+	}
 	createFolders(&node)
 	node.generateRSAKey(2048)
-    
-  Address:     args.Address,
-  Bucket:      make(map[Key]string),
-  Backup:      make(map[Key]string),
-  Successors:  make([]NodeAddress, 4),
-  FingerTable: make([]NodeAddress, 160),
-  Next:        0,
-    
-  timeFixFingers:       args.timeFixFingers,
-  timeStabilize:        args.timeStabilize,
-  timeCheckPredecessor: args.timeCheckPredecessor,
-	}
 	createRing := args.Ring
 	if createRing {
 		node.create()
@@ -124,8 +122,9 @@ func (n *Node) Quit(n1 *struct{}, n2 *struct{}) error {
 		fmt.Println("Error moving the keys to the joined node")
 	}
 	os.Exit(0)
+	return nil
 }
-  
+
 func (n *Node) AddBackup(args *BackupArgs, None *struct{}) error {
 	n.Backup[args.Key] = args.Value
 	return nil
@@ -270,21 +269,6 @@ func (n *Node) create() {
 	n.Successors[0] = n.Address
 }
 
-func (n *Node) Quit(n1 *struct{}, n2 *struct{}) error {
-	successor := n.Successors[0]
-	tmp_map := make(map[Key]string)
-
-	for k, v := range n.Bucket {
-		tmp_map[k] = v
-	}
-	ok := call(successor, "Node.Put_all", tmp_map, &struct{}{})
-	if !ok {
-		fmt.Println("Error moving the keys to the joined node")
-	}
-	os.Exit(0)
-	return nil
-}
-
 func (n *Node) fixFingers() {
 	n.Next = n.Next + 1
 	if n.Next > fingerTableSize {
@@ -329,7 +313,7 @@ func (n *Node) fixFingers() {
 func (n *Node) checkPredecessor() {
 	var reply string
 	if n.Predecessor != "" {
-    //kanske jsonrpc istället??
+		//kanske jsonrpc istället??
 		ok := call(n.Predecessor, "Node.Ping", &HostArgs{}, &reply)
 		if !ok {
 			fmt.Println("[DEBUG: node.checkPredecessor()] Predecessor is dead")
@@ -337,6 +321,16 @@ func (n *Node) checkPredecessor() {
 			for k, v := range n.Backup {
 				if v != "" {
 					n.Bucket[k] = v
+					encryptedBytes, err := n.encrypt("./samples/" + string(k))
+					if err != nil {
+						fmt.Println("[DEBUG checkPredecessor()]: error encrypting file,", k)
+						panic(err)
+					}
+					err = os.WriteFile("./tmp/"+string(n.Address)+"/"+string(k), encryptedBytes, 0777)
+					if err != nil {
+						fmt.Println("[DEBUG checkPredecessor()]: error writing file,", k)
+						panic(err)
+					}
 				}
 			}
 		}
@@ -356,8 +350,7 @@ func (n *Node) Join(newNode NodeAddress, r *JoinReply) error {
 		fmt.Println("ERROR")
 	}
 	n.Successors[0] = reply.Address
-  //TODO CHECK IF WORKS
-	ok = call(n.Successors[0], "Node.Get_all", n.Address, &struct{}{})
+	ok = call(n.Address, "Node.Get_all", n.Successors[0], &struct{}{})
 
 	return nil
 }
@@ -383,7 +376,6 @@ func (n *Node) Find_successor(requestID *big.Int, reply *FindSuccReply) error {
 		nextSuccessor := n.closest_preceding_node(requestID)
 
 		var reply2 FindSuccReply
-		//fmt.Println("[DEBUG node.FindSuccessor()] Calling for next node: ", successor)
 		ok := call(nextSuccessor, "Node.Find_successor", requestID, &reply2)
 		if !ok {
 			reply.Found = false
@@ -494,7 +486,7 @@ func (n *Node) stabilize() {
 	}
 	call(successor, "Node.Notify", n.Address, &struct{}{})
 
-  var bucketReply BucketReply
+	var bucketReply BucketReply
 	ok = call(n.Predecessor, "Node.GetBucket", &struct{}{}, &bucketReply)
 	if !ok {
 		fmt.Println("Error getting bucket of joined node")
