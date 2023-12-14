@@ -137,10 +137,14 @@ func (n *Node) Get_all(address NodeAddress, none *struct{}) error {
 	tmp_map := make(map[Key]string)
 
 	//if between(predecessorId, insertId, nodeId, true) {
+	fmt.Println("INSIDE GET ALL")
+	fmt.Println(n.Address)
+	fmt.Println(address)
 	for k, v := range n.Bucket {
 		keyId := hashString(string(k))
 		keyId.Mod(keyId, hashMod)
 		if !between(insertId, keyId, nodeId, true) {
+			fmt.Println("INSIDE IF !BETWEEN")
 			tmp_map[k] = v
 			// ok := call(address, "Node.Put", &PutArgs{Key: k, Value: v}, &struct{}{})
 			// if !ok {
@@ -263,6 +267,9 @@ func (n *Node) Join(newNode NodeAddress, r *JoinReply) error {
 		fmt.Println("ERROR")
 	}
 	n.Successors[0] = reply.Address
+	fmt.Println("THE REPLY ADRESS::::::")
+	fmt.Println(reply.Address)
+	time.Sleep(time.Second * 5)
 	ok = call(n.Successors[0], "Node.Get_all", n.Address, &struct{}{})
 
 	//n.Get_all(n.Successors[0])
@@ -283,25 +290,29 @@ func (n *Node) GetPredecessor(none *struct{}, reply *AddressReply) error {
 // @params: requestID is the current node whos succesor we want to find
 // @params: reply is the address of the successor node if one is found
 func (n *Node) Find_successor(requestID *big.Int, reply *FindSuccReply) error {
-
-	successor := n.Successors[0]
 	nodeId := hashString(string(n.Address))
-	successorId := hashString(string(successor))
+	successorId := hashString(string(n.Successors[0]))
 	nodeId.Mod(nodeId, hashMod)
 	successorId.Mod(successorId, hashMod)
 
 	//recordHash(nodeId, successorId, requestID)
 
 	if between(nodeId, requestID, successorId, true) {
-		reply.Address = successor
+		reply.Address = n.Successors[0]
 		reply.Found = true
 
 	} else {
 		nextSuccessor := n.closest_preceding_node(requestID)
+		var reply2 FindSuccReply
 		//fmt.Println("[DEBUG node.FindSuccessor()] Calling for next node: ", successor)
-		call(nextSuccessor, "Node.Find_successor", requestID, &FindSuccReply{})
-		reply.Address = successor
-		reply.Found = false
+		ok := call(nextSuccessor, "Node.Find_successor", requestID, &reply2)
+		if !ok {
+			reply.Found = false
+			reply.Address = "Error"
+		} else {
+			reply.Address = reply2.Address
+			reply.Found = true
+		}
 
 	}
 	return nil
@@ -416,13 +427,13 @@ func (n *Node) stabilize() {
 	call(successor, "Node.Notify", n.Address, &struct{}{})
 	//fmt.Print(successor)
 
-	// var bucketReply BucketReply
-	// ok = call(n.Predecessor, "Node.GetBucket", &struct{}{}, &bucketReply)
-	// if !ok {
-	// 	fmt.Println("Error getting bucket of joined node")
-	// } else if ok {
-	// 	n.Backup = bucketReply.Bucket
-	// }
+	var bucketReply BucketReply
+	ok = call(n.Predecessor, "Node.GetBucket", &struct{}{}, &bucketReply)
+	if !ok {
+		fmt.Println("Error getting bucket of joined node")
+	} else if ok {
+		n.Backup = bucketReply.Bucket
+	}
 }
 
 func (n *Node) Notify(address NodeAddress, none *struct{}) error {
