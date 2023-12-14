@@ -87,3 +87,7 @@ type BackupArgs struct {
 	Key   Key
 	Value string
 }
+
+type BucketReply struct {
+	Bucket map[Key]string
+}

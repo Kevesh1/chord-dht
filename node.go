@@ -54,7 +54,6 @@ func CreateNode(args *CreateNodeArgs) {
 		node.create()
 		fmt.Println("INSIDE")
 	}
-	node.Bucket["state"] = "abcd"
 	go node.server()
 	node.check()
 	//node.stabilize()
@@ -62,8 +61,14 @@ func CreateNode(args *CreateNodeArgs) {
 	return
 }
 
-func (n *Node) AddBackup(args *BackupArgs, None *struct{}) {
+func (n *Node) AddBackup(args *BackupArgs, None *struct{}) error {
 	n.Backup[args.Key] = args.Value
+	return nil
+}
+
+func (n *Node) GetBucket(none *struct{}, reply *BucketReply) error {
+	reply.Bucket = n.Bucket
+	return nil
 }
 
 func (n *Node) Get(args *GetArgs, reply *GetReply) error {
@@ -83,7 +88,7 @@ func (n *Node) Dump(args *GetArgs, reply *GetReply) error {
 	fmt.Println("Predecessor:", n.Predecessor)
 	fmt.Println("Successors:", n.Successors)
 	fmt.Println("Bucket:", n.Bucket)
-	fmt.Println("Bucket:", n.Backup)
+	fmt.Println("Backup:", n.Backup)
 	return nil
 }
 
@@ -104,9 +109,9 @@ func (n *Node) Put(args *PutArgs, reply *PutReply) error {
 	// 	return fmt.Errorf("Key not found")
 	// }
 	n.Bucket[key] = args.Value
-	if n.Successors[0] != "" {
-		call(n.Successors[0], "Node.AddBackup", &BackupArgs{Key: key, Value: args.Value}, struct{}{})
-	}
+	// if n.Successors[0] != "" {
+	// 	call(n.Successors[0], "Node.AddBackup", &PutArgs{Key: key, Value: args.Value}, &struct{}{})
+	// }
 	return nil
 }
 
@@ -129,30 +134,32 @@ func (n *Node) Get_all(address NodeAddress, none *struct{}) error {
 	nodeId := hashString(string(n.Address))
 	nodeId.Mod(nodeId, hashMod)
 
-	//tmp_map := make(map[Key]string)
+	tmp_map := make(map[Key]string)
 
 	//if between(predecessorId, insertId, nodeId, true) {
 	for k, v := range n.Bucket {
 		keyId := hashString(string(k))
 		keyId.Mod(keyId, hashMod)
 		if !between(insertId, keyId, nodeId, true) {
-			//tmp_map[k] = v
-			ok := call(address, "Node.Put", &PutArgs{Key: k, Value: v}, struct{}{})
-			if !ok {
-				fmt.Println("Error moving key to the joined node")
-			}
-			ok = call(address, "Node.AddBackup", &PutArgs{Key: k, Value: v}, struct{}{})
-			if !ok {
-				fmt.Println("Error moving key to the backup node")
-			}
+			tmp_map[k] = v
+			// ok := call(address, "Node.Put", &PutArgs{Key: k, Value: v}, &struct{}{})
+			// if !ok {
+			// 	fmt.Println("Error moving key to the joined node")
+			// }
+			// ok = call(n.Address, "Node.AddBackup", &PutArgs{Key: k, Value: v}, &struct{}{})
+			// if !ok {
+			// 	fmt.Println("Error moving key to the backup node")
+			// }
+			//n.Backup[k] = v
 			delete(n.Bucket, k)
 		}
 	}
+
 	//n.Put_all(tmp_map)
-	// ok := call(address, "Node.Put_all", tmp_map, &struct{}{})
-	// if !ok {
-	// 	fmt.Println("Error moving the keys to the joined node")
-	// }
+	ok := call(address, "Node.Put_all", tmp_map, &struct{}{})
+	if !ok {
+		fmt.Println("Error moving the keys to the joined node")
+	}
 	return nil
 
 	//}
@@ -201,7 +208,7 @@ func (n *Node) fixFingers() {
 		return
 	}
 	if !reply.Found {
-		fmt.Println("Could not find successor")
+		//fmt.Println("Could not find successor")
 		return
 	}
 	succesorId := hashString(string(reply.Address))
@@ -228,12 +235,16 @@ func (n *Node) fixFingers() {
 
 func (n *Node) checkPredecessor() {
 	var reply string
-	if n.Predecessor != n.Address {
+	if n.Predecessor != "" {
 		ok := call(n.Predecessor, "Node.Ping", &HostArgs{}, &reply)
 		if !ok {
 			fmt.Println("[DEBUG: node.checkPredecessor()] Predecessor is dead")
 			n.Predecessor = ""
-		} else {
+			for k, v := range n.Backup {
+				if v != "" {
+					n.Bucket[k] = v
+				}
+			}
 		}
 	}
 }
@@ -253,6 +264,7 @@ func (n *Node) Join(newNode NodeAddress, r *JoinReply) error {
 	}
 	n.Successors[0] = reply.Address
 	ok = call(n.Successors[0], "Node.Get_all", n.Address, &struct{}{})
+
 	//n.Get_all(n.Successors[0])
 
 	// if between(nodeId, newNodeId, hashString(string(n.Successors[0])), false) || n.Successors[0] == n.Address {
@@ -283,11 +295,10 @@ func (n *Node) Find_successor(requestID *big.Int, reply *FindSuccReply) error {
 	if between(nodeId, requestID, successorId, true) {
 		reply.Address = successor
 		reply.Found = true
-		return nil
-	} else {
 
+	} else {
 		nextSuccessor := n.closest_preceding_node(requestID)
-		fmt.Println("[DEBUG node.FindSuccessor()] Calling for next node: ", successor)
+		//fmt.Println("[DEBUG node.FindSuccessor()] Calling for next node: ", successor)
 		call(nextSuccessor, "Node.Find_successor", requestID, &FindSuccReply{})
 		reply.Address = successor
 		reply.Found = false
@@ -370,7 +381,6 @@ func (n *Node) stabilize() {
 			// fmt.Println(len(n.Successors))
 			// fmt.Println(len(successors))
 			n.Successors[i+1] = successors[i]
-
 		}
 	} else {
 		fmt.Println("GetSuccessors failed")
@@ -405,6 +415,14 @@ func (n *Node) stabilize() {
 	}
 	call(successor, "Node.Notify", n.Address, &struct{}{})
 	//fmt.Print(successor)
+
+	// var bucketReply BucketReply
+	// ok = call(n.Predecessor, "Node.GetBucket", &struct{}{}, &bucketReply)
+	// if !ok {
+	// 	fmt.Println("Error getting bucket of joined node")
+	// } else if ok {
+	// 	n.Backup = bucketReply.Bucket
+	// }
 }
 
 func (n *Node) Notify(address NodeAddress, none *struct{}) error {
