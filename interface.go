@@ -70,7 +70,9 @@ func cli(ipAdd NodeAddress) {
 			fmt.Println("Hosts new node")
 
 		case "put":
-			fmt.Println("Usage: put <FileKey> ")
+			if len(args) != 1 {
+				fmt.Println("Usage: put <FileKey> ")
+			}
 			putRPC(ipAdd, Key(args[1]))
 
 		case "putrandom":

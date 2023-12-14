@@ -47,6 +47,8 @@ func putRPC(address NodeAddress, key Key) {
 		fmt.Println("[DEBUG node.Put()] Error in call(): ", err)
 	} else {
 		// File logic for cypher
+		index := hashString(string(key)).Mod(hashString(string(key)), hashMod)
+		recordHash(string(key), index)
 	}
 }
 
