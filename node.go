@@ -114,7 +114,6 @@ func (n *Node) Put_all(bucket map[Key]string, reply *PutReply) error {
 }
 
 func (n *Node) Get_all(address NodeAddress, none *struct{}) error {
-	fmt.Println("GET ALL")
 	fmt.Println(address)
 	insertId := hashString(string(address))
 	insertId.Mod(insertId, hashMod)
@@ -123,14 +122,10 @@ func (n *Node) Get_all(address NodeAddress, none *struct{}) error {
 
 	tmp_map := make(map[Key]string)
 
-	fmt.Println("INSIDE GET ALL")
-	fmt.Println(n.Address)
-	fmt.Println(address)
 	for k, v := range n.Bucket {
 		keyId := hashString(string(k))
 		keyId.Mod(keyId, hashMod)
 		if !between(insertId, keyId, nodeId, true) {
-			fmt.Println("INSIDE IF !BETWEEN")
 			tmp_map[k] = v
 			delete(n.Bucket, k)
 		}
@@ -238,9 +233,6 @@ func (n *Node) Join(newNode NodeAddress, r *JoinReply) error {
 		fmt.Println("ERROR")
 	}
 	n.Successors[0] = reply.Address
-	fmt.Println("THE REPLY ADRESS::::::")
-	fmt.Println(reply.Address)
-	time.Sleep(time.Second * 5)
 	ok = call(n.Successors[0], "Node.Get_all", n.Address, &struct{}{})
 
 	return nil
